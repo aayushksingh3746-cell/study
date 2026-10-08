@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#07101d">
-<meta name="description" content="Pre-Board Mission Control — CBSE Class 10 Study Tracker">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#050b14">
 
 <title>Pre-Board Mission Control</title>
 
@@ -13,20 +12,17 @@
 <style>
 :root{
   --bg:#050b14;
-  --bg2:#08111f;
-  --panel:rgba(13,24,40,.78);
-  --panel2:rgba(17,31,50,.88);
-  --border:rgba(148,163,184,.13);
-  --border2:rgba(96,165,250,.20);
-  --text:#edf4ff;
-  --muted:#8ea1b8;
+  --bg2:#091322;
+  --card:rgba(12,23,39,.82);
+  --card2:#0b1727;
+  --border:rgba(148,163,184,.14);
+  --text:#f1f5f9;
+  --muted:#8da0b7;
   --blue:#60a5fa;
   --cyan:#67e8f9;
   --green:#4ade80;
-  --orange:#fbbf24;
   --red:#fb7185;
-  --shadow:0 25px 80px rgba(0,0,0,.38);
-  --radius:22px;
+  --yellow:#fbbf24;
 }
 
 *{
@@ -35,32 +31,55 @@
   padding:0;
 }
 
-html{
-  scroll-behavior:smooth;
-}
-
 body{
   min-height:100vh;
-  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   color:var(--text);
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
   background:
-    radial-gradient(circle at 15% 10%,rgba(37,99,235,.13),transparent 30%),
-    radial-gradient(circle at 90% 20%,rgba(6,182,212,.08),transparent 28%),
-    linear-gradient(145deg,#030711,#07111e 50%,#040914);
-  overflow-x:hidden;
+    radial-gradient(
+      circle at 10% 5%,
+      rgba(37,99,235,.15),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 90% 15%,
+      rgba(6,182,212,.08),
+      transparent 30%
+    ),
+    linear-gradient(
+      145deg,
+      #030711,
+      #07111f 55%,
+      #040914
+    );
 }
 
-body::before{
+body:before{
   content:"";
   position:fixed;
   inset:0;
   pointer-events:none;
-  opacity:.28;
+  opacity:.25;
+
   background-image:
-    linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+    linear-gradient(
+      rgba(255,255,255,.018) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.018) 1px,
+      transparent 1px
+    );
+
   background-size:40px 40px;
-  mask-image:linear-gradient(to bottom,black,transparent 85%);
 }
 
 button,
@@ -76,6 +95,7 @@ button{
   display:none!important;
 }
 
+
 /* =========================
    AUTH
 ========================= */
@@ -83,122 +103,105 @@ button{
 #authScreen{
   min-height:100vh;
   display:flex;
-  align-items:center;
   justify-content:center;
-  padding:24px;
-  position:relative;
-}
-
-.auth-glow{
-  position:absolute;
-  width:420px;
-  height:420px;
-  border-radius:50%;
-  background:rgba(37,99,235,.10);
-  filter:blur(80px);
-  pointer-events:none;
+  align-items:center;
+  padding:22px;
 }
 
 .auth-card{
-  width:min(460px,100%);
+  width:min(450px,100%);
   padding:34px;
-  background:rgba(8,17,30,.82);
   border:1px solid var(--border);
   border-radius:28px;
-  box-shadow:var(--shadow);
-  backdrop-filter:blur(24px);
-  position:relative;
-  z-index:1;
+  background:rgba(7,16,29,.86);
+  backdrop-filter:blur(25px);
+  box-shadow:0 30px 90px rgba(0,0,0,.45);
 }
 
-.brand{
+.logo{
   display:flex;
   align-items:center;
-  gap:13px;
-  margin-bottom:30px;
+  gap:12px;
+  margin-bottom:28px;
 }
 
-.brand-icon{
+.logo-icon{
   width:48px;
   height:48px;
-  border-radius:15px;
   display:grid;
   place-items:center;
-  background:linear-gradient(145deg,#1d4ed8,#0891b2);
-  box-shadow:0 12px 35px rgba(37,99,235,.25);
-  font-size:21px;
+  border-radius:15px;
+  background:linear-gradient(135deg,#2563eb,#0891b2);
+  font-size:22px;
 }
 
-.brand h1{
-  font-size:18px;
-  letter-spacing:-.4px;
+.logo-title{
+  font-weight:800;
+  font-size:17px;
 }
 
-.brand p{
+.logo-sub{
   color:var(--muted);
-  font-size:12px;
+  font-size:10px;
+  letter-spacing:1px;
   margin-top:3px;
 }
 
-.auth-heading{
-  margin-bottom:22px;
-}
-
-.auth-heading h2{
-  font-size:30px;
-  letter-spacing:-1.2px;
+.auth-title{
+  font-size:31px;
+  letter-spacing:-1.3px;
   margin-bottom:7px;
 }
 
-.auth-heading p{
+.auth-desc{
   color:var(--muted);
   line-height:1.6;
-  font-size:14px;
-}
-
-.auth-tabs{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  padding:4px;
-  background:#07101c;
-  border:1px solid var(--border);
-  border-radius:13px;
+  font-size:13px;
   margin-bottom:22px;
 }
 
-.auth-tab{
+.tabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  padding:4px;
+  border-radius:12px;
+  background:#07101d;
+  border:1px solid var(--border);
+  margin-bottom:20px;
+}
+
+.tab{
   border:0;
-  background:transparent;
-  color:var(--muted);
   padding:10px;
+  color:var(--muted);
+  background:transparent;
   border-radius:9px;
 }
 
-.auth-tab.active{
+.tab.active{
   color:white;
-  background:#16263b;
+  background:#16263a;
 }
 
-.form-group{
+.field{
   margin-bottom:15px;
 }
 
-.form-group label{
+.field label{
   display:block;
-  color:#b6c4d6;
-  font-size:12px;
+  color:#b7c5d6;
+  font-size:11px;
   margin-bottom:7px;
 }
 
 .input{
   width:100%;
   padding:13px 14px;
+  border-radius:12px;
+  outline:none;
   color:white;
   background:#07101c;
   border:1px solid var(--border);
-  outline:none;
-  border-radius:12px;
-  transition:.2s;
 }
 
 .input:focus{
@@ -206,172 +209,168 @@ button{
   box-shadow:0 0 0 3px rgba(96,165,250,.08);
 }
 
-.primary-btn{
+.main-btn{
   width:100%;
+  padding:14px;
   border:0;
-  color:white;
-  font-weight:700;
-  padding:14px 16px;
   border-radius:13px;
+  color:white;
+  font-weight:800;
   background:linear-gradient(135deg,#2563eb,#0891b2);
-  box-shadow:0 12px 30px rgba(37,99,235,.18);
-  transition:.2s;
 }
 
-.primary-btn:hover{
-  transform:translateY(-1px);
-  filter:brightness(1.08);
+.main-btn:disabled{
+  opacity:.5;
 }
 
-.primary-btn:disabled{
-  opacity:.55;
-  cursor:not-allowed;
-  transform:none;
-}
-
-.auth-message{
-  min-height:20px;
-  margin-top:14px;
-  font-size:13px;
+.message{
+  min-height:22px;
+  margin-top:12px;
+  font-size:12px;
   line-height:1.5;
 }
 
-.error{
+.message.error{
   color:#fda4af;
 }
 
-.success{
+.message.success{
   color:#86efac;
 }
 
-/* =========================
-   APP
-========================= */
 
-#app{
-  min-height:100vh;
-}
+/* =========================
+   HEADER
+========================= */
 
 .topbar{
   position:sticky;
   top:0;
   z-index:50;
-  height:72px;
+  height:70px;
+
   display:flex;
-  align-items:center;
   justify-content:space-between;
+  align-items:center;
+
   padding:0 28px;
-  background:rgba(4,10,18,.72);
+
+  background:rgba(4,10,18,.75);
   border-bottom:1px solid var(--border);
   backdrop-filter:blur(22px);
 }
 
-.top-brand{
+.top-logo{
   display:flex;
   align-items:center;
-  gap:11px;
+  gap:10px;
 }
 
-.top-brand-icon{
-  width:37px;
-  height:37px;
-  border-radius:11px;
+.top-icon{
+  width:36px;
+  height:36px;
   display:grid;
   place-items:center;
-  background:linear-gradient(145deg,#1d4ed8,#0891b2);
+  border-radius:11px;
+  background:linear-gradient(135deg,#2563eb,#0891b2);
 }
 
-.top-brand strong{
-  font-size:14px;
+.top-name{
+  font-size:13px;
+  font-weight:800;
 }
 
-.top-brand span{
-  display:block;
+.top-sub{
   color:var(--muted);
-  font-size:10px;
+  font-size:9px;
+  letter-spacing:1px;
   margin-top:2px;
 }
 
-.logout-btn{
-  border:1px solid var(--border);
-  color:#cbd5e1;
-  background:rgba(15,23,42,.7);
+.logout{
   padding:9px 13px;
+  color:#cbd5e1;
+  background:#0b1727;
+  border:1px solid var(--border);
   border-radius:10px;
-  font-size:12px;
+  font-size:11px;
 }
 
-.logout-btn:hover{
-  border-color:rgba(251,113,133,.35);
-  color:#fda4af;
-}
+
+/* =========================
+   LAYOUT
+========================= */
 
 .container{
-  width:min(1280px,calc(100% - 36px));
-  margin:0 auto;
-  padding:34px 0 60px;
+  width:min(1250px,calc(100% - 32px));
+  margin:auto;
+  padding:35px 0 60px;
 }
 
 .hero{
   display:flex;
   justify-content:space-between;
-  align-items:flex-end;
-  gap:30px;
-  margin-bottom:26px;
+  align-items:end;
+  gap:25px;
+  margin-bottom:25px;
 }
 
-.hero-kicker{
+.kicker{
   color:var(--cyan);
-  font-size:11px;
+  font-size:10px;
+  letter-spacing:2px;
   font-weight:800;
   text-transform:uppercase;
-  letter-spacing:2px;
   margin-bottom:10px;
 }
 
-.hero h2{
-  font-size:clamp(30px,5vw,52px);
-  letter-spacing:-2.4px;
+.hero h1{
+  font-size:clamp(32px,5vw,55px);
   line-height:1;
-  max-width:700px;
+  letter-spacing:-2.5px;
 }
 
-.hero h2 span{
-  background:linear-gradient(90deg,#fff,#8cc8ff,#67e8f9);
+.hero h1 span{
+  background:linear-gradient(
+    90deg,
+    white,
+    #9dccff,
+    #67e8f9
+  );
   -webkit-background-clip:text;
   color:transparent;
 }
 
-.hero-sub{
-  color:var(--muted);
-  margin-top:13px;
+.hero p{
   max-width:650px;
-  line-height:1.7;
-  font-size:14px;
-}
-
-.date-pill{
-  flex-shrink:0;
-  border:1px solid var(--border);
-  background:var(--panel);
-  border-radius:15px;
-  padding:13px 17px;
-  text-align:right;
-}
-
-.date-pill small{
   color:var(--muted);
-  display:block;
-  font-size:10px;
-  text-transform:uppercase;
-  letter-spacing:1px;
+  font-size:13px;
+  line-height:1.7;
+  margin-top:13px;
 }
 
-.date-pill strong{
-  display:block;
-  margin-top:3px;
-  font-size:13px;
+.date{
+  flex-shrink:0;
+  padding:13px 16px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:var(--card);
 }
+
+.date small{
+  display:block;
+  color:var(--muted);
+  font-size:9px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+}
+
+.date strong{
+  display:block;
+  margin-top:4px;
+  font-size:12px;
+}
+
 
 /* =========================
    STATS
@@ -380,172 +379,171 @@ button{
 .stats{
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  gap:14px;
-  margin-bottom:18px;
+  gap:13px;
+  margin-bottom:17px;
 }
 
 .stat{
-  padding:18px;
-  border-radius:18px;
-  background:var(--panel);
+  padding:17px;
   border:1px solid var(--border);
-  box-shadow:0 12px 40px rgba(0,0,0,.15);
+  border-radius:18px;
+  background:var(--card);
 }
 
 .stat-label{
   color:var(--muted);
-  font-size:11px;
+  font-size:10px;
   text-transform:uppercase;
   letter-spacing:1px;
 }
 
 .stat-value{
+  margin-top:5px;
   font-size:28px;
-  font-weight:800;
-  margin-top:6px;
-  letter-spacing:-1px;
+  font-weight:850;
 }
 
 .stat-detail{
-  color:#73879f;
-  font-size:11px;
-  margin-top:4px;
+  color:#667b94;
+  font-size:10px;
+  margin-top:3px;
 }
+
 
 /* =========================
    GRID
 ========================= */
 
-.dashboard-grid{
+.grid{
   display:grid;
-  grid-template-columns:minmax(0,1fr) 340px;
-  gap:18px;
+  grid-template-columns:minmax(0,1fr) 330px;
+  gap:17px;
 }
 
 .card{
-  background:var(--panel);
   border:1px solid var(--border);
-  border-radius:var(--radius);
-  box-shadow:0 18px 60px rgba(0,0,0,.20);
+  border-radius:22px;
+  background:var(--card);
   backdrop-filter:blur(18px);
+  box-shadow:0 20px 60px rgba(0,0,0,.2);
+  overflow:hidden;
 }
 
 .card-header{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  gap:15px;
-  padding:21px 22px;
+  padding:20px;
   border-bottom:1px solid var(--border);
 }
 
 .card-title{
-  font-size:15px;
-  font-weight:750;
+  font-size:14px;
+  font-weight:800;
 }
 
-.card-subtitle{
+.card-sub{
   color:var(--muted);
-  font-size:11px;
+  font-size:10px;
   margin-top:4px;
 }
 
 .card-body{
-  padding:22px;
+  padding:20px;
 }
+
 
 /* =========================
-   STRATEGY
+   AI PLANNER
 ========================= */
 
-.strategy-box{
+.strategy{
   display:flex;
-  gap:10px;
-  margin-bottom:16px;
+  gap:9px;
+  margin-bottom:13px;
 }
 
-.strategy-input{
+.strategy input{
   flex:1;
   min-width:0;
-  padding:14px 15px;
-  border-radius:13px;
+  padding:14px;
   color:white;
   background:#07101c;
   border:1px solid var(--border);
+  border-radius:13px;
   outline:none;
 }
 
-.strategy-input:focus{
+.strategy input:focus{
   border-color:rgba(96,165,250,.5);
 }
 
-.generate-btn{
+.generate{
+  min-width:150px;
   border:0;
-  padding:0 18px;
   border-radius:13px;
   color:white;
-  font-weight:700;
+  font-weight:800;
   background:linear-gradient(135deg,#2563eb,#0891b2);
-  min-width:155px;
 }
 
-.generate-btn:disabled{
-  opacity:.55;
-  cursor:not-allowed;
+.generate:disabled{
+  opacity:.5;
 }
 
 .ai-note{
   display:flex;
-  gap:9px;
-  padding:11px 13px;
-  border-radius:12px;
-  color:#8ea1b8;
-  background:rgba(37,99,235,.055);
+  gap:8px;
+  padding:11px 12px;
+  border-radius:11px;
+  background:rgba(37,99,235,.05);
   border:1px solid rgba(96,165,250,.08);
-  font-size:11px;
+  color:#7f93aa;
+  font-size:10px;
   line-height:1.5;
-  margin-bottom:20px;
+  margin-bottom:19px;
 }
+
 
 /* =========================
    PROGRESS
 ========================= */
 
-.progress-wrap{
-  margin-bottom:19px;
+.progress{
+  margin-bottom:18px;
 }
 
 .progress-top{
   display:flex;
   justify-content:space-between;
-  margin-bottom:8px;
-  font-size:12px;
+  font-size:11px;
+  margin-bottom:7px;
 }
 
 .progress-top span:first-child{
-  color:#b9c7d8;
+  color:#b7c5d6;
 }
 
 .progress-top span:last-child{
   color:var(--cyan);
-  font-weight:700;
+  font-weight:800;
 }
 
 .progress-track{
-  height:9px;
-  border-radius:99px;
+  height:8px;
   background:#07101c;
+  border-radius:99px;
   overflow:hidden;
-  border:1px solid rgba(255,255,255,.04);
 }
 
 .progress-fill{
-  height:100%;
   width:0;
+  height:100%;
   border-radius:inherit;
   background:linear-gradient(90deg,#2563eb,#22d3ee);
-  transition:width .5s ease;
+  transition:width .4s;
 }
+
 
 /* =========================
    TASKS
@@ -554,46 +552,42 @@ button{
 .tasks{
   display:flex;
   flex-direction:column;
-  gap:9px;
+  gap:8px;
 }
 
 .task{
   display:grid;
-  grid-template-columns:28px 1fr auto;
+  grid-template-columns:28px 1fr 30px;
   align-items:center;
-  gap:12px;
-  padding:14px;
+  gap:10px;
+  padding:13px;
   border:1px solid var(--border);
-  background:rgba(6,14,25,.72);
-  border-radius:15px;
-  transition:.2s;
+  border-radius:14px;
+  background:rgba(5,13,24,.7);
 }
 
 .task:hover{
-  border-color:var(--border2);
-  transform:translateY(-1px);
+  border-color:rgba(96,165,250,.22);
 }
 
 .task.completed{
-  opacity:.62;
+  opacity:.55;
 }
 
-.task.completed .task-description{
+.task.completed .description{
   text-decoration:line-through;
-  color:#708198;
 }
 
 .check{
   width:24px;
   height:24px;
   border-radius:8px;
-  border:1px solid #34465d;
-  background:#091321;
+  border:1px solid #33475f;
+  background:#081321;
+  color:white;
   display:grid;
   place-items:center;
-  color:white;
-  font-size:13px;
-  cursor:pointer;
+  padding:0;
 }
 
 .task.completed .check{
@@ -601,213 +595,215 @@ button{
   border-color:#22c55e;
 }
 
-.task-subject{
-  font-size:10px;
+.subject{
   color:var(--cyan);
-  text-transform:uppercase;
-  letter-spacing:1px;
+  font-size:9px;
   font-weight:800;
-  margin-bottom:4px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  margin-bottom:3px;
 }
 
-.task-description{
-  color:#d6e1ee;
-  font-size:13px;
+.description{
+  color:#d4dfeb;
+  font-size:12px;
   line-height:1.5;
 }
 
-.task-number{
+.number{
   color:#52657c;
-  font-size:10px;
+  font-size:9px;
+  text-align:right;
 }
 
 .empty{
-  padding:35px 20px;
   text-align:center;
-  color:var(--muted);
+  padding:30px 15px;
   border:1px dashed rgba(148,163,184,.14);
-  border-radius:16px;
+  border-radius:15px;
+  color:var(--muted);
+  font-size:12px;
   line-height:1.7;
-  font-size:13px;
 }
+
 
 /* =========================
    POMODORO
 ========================= */
 
-.pomo-card{
-  overflow:hidden;
-}
-
-.pomo-display{
+.timer-card{
   text-align:center;
-  padding:28px 20px 18px;
 }
 
-.pomo-mode{
+.timer-wrap{
+  padding:24px 20px 10px;
+}
+
+.ring{
+  width:185px;
+  height:185px;
+  margin:auto;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+
+  background:
+    radial-gradient(
+      circle,
+      #081321 58%,
+      transparent 59%
+    ),
+    conic-gradient(
+      #22d3ee var(--percent,0%),
+      #17283b 0
+    );
+}
+
+.mode{
   color:var(--cyan);
-  font-size:10px;
-  font-weight:800;
+  font-size:9px;
   letter-spacing:2px;
+  font-weight:800;
   text-transform:uppercase;
 }
 
 .timer{
-  font-variant-numeric:tabular-nums;
-  font-size:64px;
-  font-weight:800;
+  font-size:52px;
+  font-weight:850;
   letter-spacing:-3px;
-  margin:7px 0;
+  font-variant-numeric:tabular-nums;
+  margin:4px 0;
 }
 
-.timer-note{
+.timer-desc{
   color:var(--muted);
-  font-size:11px;
-}
-
-.pomo-ring{
-  width:190px;
-  height:190px;
-  margin:0 auto 15px;
-  border-radius:50%;
-  display:grid;
-  place-items:center;
-  position:relative;
-  background:
-    radial-gradient(circle at center,#081321 57%,transparent 58%),
-    conic-gradient(#22d3ee var(--progress),#142335 0);
-}
-
-.pomo-ring::before{
-  content:"";
-  position:absolute;
-  inset:7px;
-  border-radius:50%;
-  border:1px solid rgba(103,232,249,.10);
-}
-
-.pomo-controls{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:9px;
-  padding:0 20px 20px;
-}
-
-.pomo-btn{
-  padding:11px;
-  border-radius:11px;
-  border:1px solid var(--border);
-  color:#d8e5f3;
-  background:#091321;
-}
-
-.pomo-btn.primary{
-  color:white;
-  border-color:rgba(96,165,250,.25);
-  background:rgba(37,99,235,.16);
+  font-size:9px;
 }
 
 .mode-buttons{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:8px;
-  padding:0 20px 20px;
+  padding:10px 20px;
 }
 
 .mode-btn{
+  padding:8px;
   border:1px solid var(--border);
+  border-radius:9px;
   color:var(--muted);
   background:transparent;
-  border-radius:10px;
-  padding:8px;
-  font-size:11px;
+  font-size:10px;
 }
 
 .mode-btn.active{
   color:white;
-  background:#15253a;
-  border-color:rgba(96,165,250,.2);
+  background:#14243a;
 }
+
+.timer-controls{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  padding:10px 20px 20px;
+}
+
+.timer-btn{
+  padding:11px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  color:#d9e5f2;
+  background:#081321;
+}
+
+.timer-btn.primary{
+  background:rgba(37,99,235,.17);
+  border-color:rgba(96,165,250,.22);
+}
+
 
 /* =========================
-   QUICK INFO
+   SUBJECTS
 ========================= */
 
-.quick-card{
-  margin-top:18px;
+.quick{
+  margin-top:17px;
 }
 
-.subject-list{
+.subjects{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:8px;
 }
 
-.subject{
+.subject-box{
   padding:11px;
+  border:1px solid var(--border);
   border-radius:11px;
   background:#07101c;
-  border:1px solid var(--border);
-  font-size:11px;
-  color:#b8c6d7;
+  color:#8195ac;
+  font-size:10px;
+  line-height:1.5;
 }
 
-.subject strong{
+.subject-box strong{
   display:block;
-  color:#e5eef9;
-  font-size:12px;
-  margin-bottom:2px;
+  color:#e1eaf4;
+  font-size:11px;
 }
+
 
 /* =========================
    LOADING
 ========================= */
 
-#loadingOverlay{
+#loading{
   position:fixed;
   inset:0;
   z-index:100;
   display:none;
   align-items:center;
   justify-content:center;
-  background:rgba(2,7,13,.68);
+  background:rgba(2,7,13,.72);
   backdrop-filter:blur(8px);
 }
 
 .loading-box{
-  width:min(330px,calc(100% - 40px));
-  padding:28px;
-  border-radius:20px;
+  width:min(340px,calc(100% - 35px));
+  padding:27px;
   border:1px solid var(--border);
+  border-radius:20px;
   background:#091321;
   text-align:center;
-  box-shadow:var(--shadow);
 }
 
 .spinner{
-  width:35px;
-  height:35px;
-  border-radius:50%;
-  border:3px solid #1d334d;
+  width:34px;
+  height:34px;
+  margin:auto auto 14px;
+  border:3px solid #1d3149;
   border-top-color:#67e8f9;
+  border-radius:50%;
   animation:spin .8s linear infinite;
-  margin:0 auto 16px;
 }
 
 @keyframes spin{
-  to{transform:rotate(360deg)}
+  to{
+    transform:rotate(360deg);
+  }
 }
 
 .loading-box strong{
   display:block;
-  font-size:14px;
+  font-size:13px;
 }
 
 .loading-box p{
   color:var(--muted);
-  font-size:11px;
-  margin-top:6px;
+  font-size:10px;
+  margin-top:5px;
 }
+
 
 /* =========================
    TOAST
@@ -815,44 +811,45 @@ button{
 
 #toast{
   position:fixed;
-  right:20px;
-  bottom:20px;
+  right:18px;
+  bottom:18px;
   z-index:120;
   max-width:350px;
-  padding:13px 16px;
-  border-radius:13px;
-  background:#0d1a2b;
+  padding:13px 15px;
+  border-radius:12px;
   border:1px solid var(--border);
-  box-shadow:var(--shadow);
+  background:#0c192a;
   color:#dce8f5;
-  font-size:12px;
-  transform:translateY(20px);
+  font-size:11px;
   opacity:0;
+  transform:translateY(15px);
   pointer-events:none;
   transition:.25s;
 }
 
 #toast.show{
-  transform:translateY(0);
   opacity:1;
+  transform:translateY(0);
 }
 
 #toast.bad{
-  border-color:rgba(251,113,133,.28);
   color:#fecdd3;
+  border-color:rgba(251,113,133,.3);
 }
 
 #toast.good{
-  border-color:rgba(74,222,128,.25);
   color:#bbf7d0;
+  border-color:rgba(74,222,128,.3);
 }
+
 
 /* =========================
    RESPONSIVE
 ========================= */
 
-@media(max-width:950px){
-  .dashboard-grid{
+@media(max-width:900px){
+
+  .grid{
     grid-template-columns:1fr;
   }
 
@@ -860,19 +857,16 @@ button{
     grid-template-columns:repeat(2,1fr);
   }
 
-  .pomo-ring{
-    width:170px;
-    height:170px;
-  }
 }
 
 @media(max-width:650px){
+
   .topbar{
-    padding:0 16px;
+    padding:0 15px;
   }
 
   .container{
-    width:min(100% - 24px,1280px);
+    width:calc(100% - 24px);
     padding-top:25px;
   }
 
@@ -880,336 +874,496 @@ button{
     display:block;
   }
 
-  .date-pill{
+  .date{
     display:inline-block;
-    margin-top:18px;
-    text-align:left;
+    margin-top:17px;
   }
 
-  .hero h2{
-    font-size:36px;
+  .hero h1{
+    font-size:38px;
   }
 
-  .stats{
-    grid-template-columns:1fr 1fr;
-  }
-
-  .strategy-box{
+  .strategy{
     flex-direction:column;
   }
 
-  .generate-btn{
+  .generate{
     height:46px;
   }
 
-  .card-header,
-  .card-body{
-    padding:17px;
-  }
-
   .task{
-    grid-template-columns:27px 1fr;
+    grid-template-columns:28px 1fr;
   }
 
-  .task-number{
+  .number{
     display:none;
+  }
+
+}
+
+@media(max-width:400px){
+
+  .stats{
+    grid-template-columns:1fr;
   }
 
   .auth-card{
     padding:25px;
   }
-}
-
-@media(max-width:400px){
-  .stats{
-    grid-template-columns:1fr;
-  }
 
   .timer{
-    font-size:54px;
+    font-size:46px;
   }
+
 }
 </style>
 </head>
 
 <body>
 
-<!-- =========================
-     AUTH SCREEN
-========================= -->
+
+<!-- =====================================================
+     AUTH
+===================================================== -->
 
 <section id="authScreen">
 
-  <div class="auth-glow"></div>
-
   <div class="auth-card">
 
-    <div class="brand">
-      <div class="brand-icon">⌁</div>
-      <div>
-        <h1>Pre-Board Mission Control</h1>
-        <p>CBSE CLASS 10 • STUDY COMMAND CENTRE</p>
+    <div class="logo">
+
+      <div class="logo-icon">
+        ⌁
       </div>
+
+      <div>
+        <div class="logo-title">
+          Pre-Board Mission Control
+        </div>
+
+        <div class="logo-sub">
+          CBSE CLASS 10 • STUDY COMMAND CENTRE
+        </div>
+      </div>
+
     </div>
 
-    <div class="auth-heading">
-      <h2 id="authTitle">Welcome back.</h2>
-      <p id="authSubtitle">
-        Sign in to continue your daily study mission.
-      </p>
+
+    <h1 class="auth-title" id="authTitle">
+      Welcome back.
+    </h1>
+
+    <p class="auth-desc" id="authDesc">
+      Sign in to continue your daily study mission.
+    </p>
+
+
+    <div class="tabs">
+
+      <button
+        class="tab active"
+        id="loginTab"
+        type="button"
+      >
+        Login
+      </button>
+
+      <button
+        class="tab"
+        id="signupTab"
+        type="button"
+      >
+        Create account
+      </button>
+
     </div>
 
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="loginTab">Login</button>
-      <button class="auth-tab" id="signupTab">Create account</button>
-    </div>
 
     <form id="authForm">
 
-      <div class="form-group">
-        <label for="email">Email address</label>
+      <div class="field">
+
+        <label>Email address</label>
+
         <input
-          class="input"
           id="email"
+          class="input"
           type="email"
           autocomplete="email"
           placeholder="you@example.com"
           required
         >
+
       </div>
 
-      <div class="form-group">
-        <label for="password">Password</label>
+
+      <div class="field">
+
+        <label>Password</label>
+
         <input
-          class="input"
           id="password"
+          class="input"
           type="password"
           autocomplete="current-password"
-          placeholder="Minimum 6 characters"
           minlength="6"
+          placeholder="Minimum 6 characters"
           required
         >
+
       </div>
 
-      <button class="primary-btn" id="authButton" type="submit">
+
+      <button
+        id="authButton"
+        class="main-btn"
+        type="submit"
+      >
         Enter Mission Control
       </button>
 
-      <div class="auth-message" id="authMessage"></div>
+
+      <div
+        id="authMessage"
+        class="message"
+      ></div>
 
     </form>
 
   </div>
+
 </section>
 
 
-<!-- =========================
-     APPLICATION
-========================= -->
+<!-- =====================================================
+     APP
+===================================================== -->
 
-<section id="app" class="hidden">
+<section
+  id="app"
+  class="hidden"
+>
 
-  <header class="topbar">
+<header class="topbar">
 
-    <div class="top-brand">
-      <div class="top-brand-icon">⌁</div>
-      <div>
-        <strong>MISSION CONTROL</strong>
-        <span>CLASS 10 PRE-BOARD</span>
+  <div class="top-logo">
+
+    <div class="top-icon">
+      ⌁
+    </div>
+
+    <div>
+      <div class="top-name">
+        MISSION CONTROL
+      </div>
+
+      <div class="top-sub">
+        CLASS 10 PRE-BOARD
       </div>
     </div>
 
-    <button class="logout-btn" id="logoutBtn">
-      Logout
-    </button>
-
-  </header>
+  </div>
 
 
-  <main class="container">
+  <button
+    id="logoutButton"
+    class="logout"
+  >
+    Logout
+  </button>
 
-    <!-- HERO -->
+</header>
 
-    <section class="hero">
 
-      <div>
-        <div class="hero-kicker">Daily command centre</div>
+<main class="container">
 
-        <h2>
-          Build your
-          <span>study advantage.</span>
-        </h2>
 
-        <p class="hero-sub">
-          Tell the planner what you need to accomplish today.
-          Gemini will convert your routine into focused,
-          trackable CBSE Class 10 tasks.
-        </p>
+  <!-- HERO -->
+
+  <section class="hero">
+
+    <div>
+
+      <div class="kicker">
+        Daily command centre
       </div>
 
-      <div class="date-pill">
-        <small>Mission date</small>
-        <strong id="todayDate">—</strong>
+      <h1>
+        Build your
+        <span>study advantage.</span>
+      </h1>
+
+      <p>
+        Tell the AI planner what you need to accomplish today.
+        It will convert your available time into focused,
+        trackable study missions.
+      </p>
+
+    </div>
+
+
+    <div class="date">
+
+      <small>
+        Mission date
+      </small>
+
+      <strong id="todayDate">
+        —
+      </strong>
+
+    </div>
+
+  </section>
+
+
+  <!-- STATS -->
+
+  <section class="stats">
+
+    <div class="stat">
+
+      <div class="stat-label">
+        Today's Tasks
       </div>
 
-    </section>
-
-
-    <!-- STATS -->
-
-    <section class="stats">
-
-      <div class="stat">
-        <div class="stat-label">Today's Tasks</div>
-        <div class="stat-value" id="totalTasks">0</div>
-        <div class="stat-detail">AI-generated missions</div>
+      <div
+        class="stat-value"
+        id="totalTasks"
+      >
+        0
       </div>
 
-      <div class="stat">
-        <div class="stat-label">Completed</div>
-        <div class="stat-value" id="completedTasks">0</div>
-        <div class="stat-detail">Tasks finished</div>
+      <div class="stat-detail">
+        Active missions
       </div>
 
-      <div class="stat">
-        <div class="stat-label">Progress</div>
-        <div class="stat-value" id="progressPercent">0%</div>
-        <div class="stat-detail">Today's completion</div>
+    </div>
+
+
+    <div class="stat">
+
+      <div class="stat-label">
+        Completed
       </div>
 
-      <div class="stat">
-        <div class="stat-label">Focus</div>
-        <div class="stat-value" id="focusCount">0</div>
-        <div class="stat-detail">Pomodoro sessions</div>
+      <div
+        class="stat-value"
+        id="completedTasks"
+      >
+        0
       </div>
 
-    </section>
+      <div class="stat-detail">
+        Finished missions
+      </div>
+
+    </div>
 
 
-    <!-- MAIN GRID -->
+    <div class="stat">
 
-    <section class="dashboard-grid">
+      <div class="stat-label">
+        Progress
+      </div>
 
-      <!-- LEFT -->
+      <div
+        class="stat-value"
+        id="progressPercent"
+      >
+        0%
+      </div>
 
-      <div>
+      <div class="stat-detail">
+        Daily completion
+      </div>
 
-        <div class="card">
+    </div>
 
-          <div class="card-header">
-            <div>
-              <div class="card-title">AI Study Strategy</div>
-              <div class="card-subtitle">
-                Generate today's mission from your available time.
-              </div>
+
+    <div class="stat">
+
+      <div class="stat-label">
+        Focus
+      </div>
+
+      <div
+        class="stat-value"
+        id="focusSessions"
+      >
+        0
+      </div>
+
+      <div class="stat-detail">
+        Study sessions
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- GRID -->
+
+  <section class="grid">
+
+
+    <!-- LEFT -->
+
+    <div>
+
+
+      <!-- AI PLANNER -->
+
+      <div class="card">
+
+        <div class="card-header">
+
+          <div>
+
+            <div class="card-title">
+              AI Study Strategy
             </div>
+
+            <div class="card-sub">
+              Generate today's mission from your available time.
+            </div>
+
           </div>
 
-          <div class="card-body">
+        </div>
 
-            <div class="strategy-box">
 
-              <input
-                id="routineInput"
-                class="strategy-input"
-                type="text"
-                maxlength="1000"
-                placeholder="e.g. I have 4 hours after school. I need to revise Science and Maths..."
-              >
+        <div class="card-body">
 
-              <button
-                class="generate-btn"
-                id="generateBtn"
-              >
-                Generate Strategy
-              </button>
 
-            </div>
+          <div class="strategy">
 
-            <div class="ai-note">
-              <span>✦</span>
+            <input
+              id="routine"
+              maxlength="1000"
+              placeholder="Example: I have 4 hours after school. I need to revise Science and Maths..."
+            >
+
+            <button
+              id="generateButton"
+              class="generate"
+            >
+              Generate Strategy
+            </button>
+
+          </div>
+
+
+          <div class="ai-note">
+
+            <span>✦</span>
+
+            <span>
+              Your routine is sent to Gemini only for planning.
+              The raw routine is never inserted into Supabase.
+            </span>
+
+          </div>
+
+
+          <div class="progress">
+
+            <div class="progress-top">
+
               <span>
-                Your routine is sent to Gemini only for planning.
-                The raw routine is never stored in Supabase.
+                Mission progress
               </span>
-            </div>
 
-            <div class="progress-wrap">
-
-              <div class="progress-top">
-                <span>Mission progress</span>
-                <span id="progressText">0 / 0</span>
-              </div>
-
-              <div class="progress-track">
-                <div
-                  class="progress-fill"
-                  id="progressFill"
-                ></div>
-              </div>
+              <span id="progressText">
+                0 / 0
+              </span>
 
             </div>
 
-            <div class="tasks" id="tasksContainer">
+            <div class="progress-track">
 
-              <div class="empty">
-                No missions generated yet.<br>
-                Enter your available study time above.
-              </div>
+              <div
+                id="progressFill"
+                class="progress-fill"
+              ></div>
 
             </div>
 
           </div>
+
+
+          <div
+            id="tasks"
+            class="tasks"
+          >
+
+            <div class="empty">
+              No missions generated yet.<br>
+              Enter your available study time above.
+            </div>
+
+          </div>
+
+
+        </div>
+
+      </div>
+
+
+      <!-- SUBJECTS -->
+
+      <div class="card quick">
+
+        <div class="card-header">
+
+          <div>
+
+            <div class="card-title">
+              Mission Subjects
+            </div>
+
+            <div class="card-sub">
+              Complete CBSE Class 10 preparation.
+            </div>
+
+          </div>
+
         </div>
 
 
-        <!-- SUBJECTS -->
+        <div class="card-body">
 
-        <div class="card quick-card">
+          <div class="subjects">
 
-          <div class="card-header">
-            <div>
-              <div class="card-title">Mission Subjects</div>
-              <div class="card-subtitle">
-                Your planner covers the complete subject set.
-              </div>
+            <div class="subject-box">
+              <strong>Mathematics</strong>
+              Concepts + problem solving
             </div>
-          </div>
 
-          <div class="card-body">
+            <div class="subject-box">
+              <strong>Science</strong>
+              Physics + Chemistry + Biology
+            </div>
 
-            <div class="subject-list">
+            <div class="subject-box">
+              <strong>Social Science</strong>
+              History + Geography + Civics + Economics
+            </div>
 
-              <div class="subject">
-                <strong>Mathematics</strong>
-                Core concepts + practice
-              </div>
+            <div class="subject-box">
+              <strong>English</strong>
+              Literature + language
+            </div>
 
-              <div class="subject">
-                <strong>Science</strong>
-                Physics + Chemistry + Biology
-              </div>
+            <div class="subject-box">
+              <strong>Hindi B</strong>
+              साहित्य + व्याकरण
+            </div>
 
-              <div class="subject">
-                <strong>Social Science</strong>
-                History + Geography + Civics + Economics
-              </div>
-
-              <div class="subject">
-                <strong>English</strong>
-                Literature + Language
-              </div>
-
-              <div class="subject">
-                <strong>Hindi B</strong>
-                साहित्य + व्याकरण
-              </div>
-
-              <div class="subject">
-                <strong>AI 417</strong>
-                Artificial Intelligence
-              </div>
-
+            <div class="subject-box">
+              <strong>AI 417</strong>
+              Artificial Intelligence
             </div>
 
           </div>
@@ -1218,118 +1372,60 @@ button{
 
       </div>
 
+    </div>
 
-      <!-- RIGHT -->
 
-      <aside>
+    <!-- RIGHT -->
 
-        <div class="card pomo-card">
+    <aside>
 
-          <div class="card-header">
-            <div>
-              <div class="card-title">Focus Engine</div>
-              <div class="card-subtitle">
-                Pomodoro productivity timer
-              </div>
-            </div>
-          </div>
 
-          <div class="pomo-display">
+      <!-- POMODORO -->
 
-            <div class="pomo-ring" id="pomoRing">
+      <div class="card timer-card">
 
-              <div>
+        <div class="card-header">
 
-                <div class="pomo-mode" id="pomoMode">
-                  Study
-                </div>
+          <div style="text-align:left">
 
-                <div class="timer" id="timer">
-                  25:00
-                </div>
-
-                <div class="timer-note">
-                  Focus without distraction
-                </div>
-
-              </div>
-
+            <div class="card-title">
+              Focus Engine
             </div>
 
-          </div>
-
-          <div class="mode-buttons">
-
-            <button
-              class="mode-btn active"
-              id="studyModeBtn"
-            >
-              Study · 25m
-            </button>
-
-            <button
-              class="mode-btn"
-              id="breakModeBtn"
-            >
-              Break · 5m
-            </button>
-
-          </div>
-
-          <div class="pomo-controls">
-
-            <button
-              class="pomo-btn primary"
-              id="startPauseBtn"
-            >
-              Start
-            </button>
-
-            <button
-              class="pomo-btn"
-              id="resetTimerBtn"
-            >
-              Reset
-            </button>
+            <div class="card-sub">
+              Pomodoro productivity timer
+            </div>
 
           </div>
 
         </div>
 
 
-        <div class="card quick-card">
+        <div class="timer-wrap">
 
-          <div class="card-header">
+          <div
+            id="ring"
+            class="ring"
+          >
+
             <div>
-              <div class="card-title">Focus Protocol</div>
-              <div class="card-subtitle">
-                Simple rules for today's mission
-              </div>
-            </div>
-          </div>
 
-          <div class="card-body">
-
-            <div style="display:flex;flex-direction:column;gap:13px;font-size:12px;color:#9cafc4;line-height:1.55">
-
-              <div>
-                <strong style="color:#e5eef9">01 · Single task</strong><br>
-                Finish the current mission before switching.
+              <div
+                id="timerMode"
+                class="mode"
+              >
+                Study
               </div>
 
-              <div>
-                <strong style="color:#e5eef9">02 · 25 minutes</strong><br>
-                Use the Study timer for uninterrupted focus.
+              <div
+                id="timer"
+                class="timer"
+              >
+                25:00
               </div>
 
-              <div>
-                <strong style="color:#e5eef9">03 · 5 minutes</strong><br>
-                Take a real Coffee Break after each session.
-              </div>
-
-              <div>
-                <strong style="color:#e5eef9">04 · Track everything</strong><br>
-                Tick completed missions immediately.
+              <div class="timer-desc">
+                Focus without distraction
               </div>
 
             </div>
@@ -1338,18 +1434,129 @@ button{
 
         </div>
 
-      </aside>
 
-    </section>
+        <div class="mode-buttons">
 
-  </main>
+          <button
+            id="studyMode"
+            class="mode-btn active"
+          >
+            Study · 25m
+          </button>
+
+          <button
+            id="breakMode"
+            class="mode-btn"
+          >
+            Break · 5m
+          </button>
+
+        </div>
+
+
+        <div class="timer-controls">
+
+          <button
+            id="startPause"
+            class="timer-btn primary"
+          >
+            Start
+          </button>
+
+          <button
+            id="resetTimer"
+            class="timer-btn"
+          >
+            Reset
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- PROTOCOL -->
+
+      <div class="card quick">
+
+        <div class="card-header">
+
+          <div style="text-align:left">
+
+            <div class="card-title">
+              Focus Protocol
+            </div>
+
+            <div class="card-sub">
+              Today's operating rules
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="card-body">
+
+          <div
+            style="
+              display:flex;
+              flex-direction:column;
+              gap:14px;
+              color:#8498af;
+              font-size:11px;
+              line-height:1.55;
+            "
+          >
+
+            <div>
+              <strong style="color:#e2eaf4">
+                01 · Single task
+              </strong><br>
+              Finish the current mission before switching.
+            </div>
+
+            <div>
+              <strong style="color:#e2eaf4">
+                02 · 25 minutes
+              </strong><br>
+              Use the Study timer for focused work.
+            </div>
+
+            <div>
+              <strong style="color:#e2eaf4">
+                03 · 5 minutes
+              </strong><br>
+              Take a proper Coffee Break.
+            </div>
+
+            <div>
+              <strong style="color:#e2eaf4">
+                04 · Track everything
+              </strong><br>
+              Tick missions as soon as you finish them.
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </aside>
+
+  </section>
+
+</main>
 
 </section>
 
 
-<!-- LOADING -->
+<!-- =====================================================
+     LOADING
+===================================================== -->
 
-<div id="loadingOverlay">
+<div id="loading">
 
   <div class="loading-box">
 
@@ -1360,7 +1567,7 @@ button{
     </strong>
 
     <p id="loadingText">
-      Gemini is turning your routine into focused missions.
+      Gemini is creating your study missions.
     </p>
 
   </div>
@@ -1374,8 +1581,11 @@ button{
 
 
 <script>
+"use strict";
+
+
 /* =========================================================
-   CONFIGURATION
+   CONFIG
 ========================================================= */
 
 const SUPABASE_URL =
@@ -1384,32 +1594,41 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmxlIiwicmVmIjoiaGNlZmZyYmp2b3pxa2x0cmd4b3UiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc5MTQyMTU4NiwgImV4cCI6MjEwNjk5NzU4Nn0.lBh9GxfHnfUUJa0LFgzCahHEBVPIgPFRYljz0vRMS4";
 
-/*
-  Gemini key supplied by you.
-  For a public production website, move this request
-  to a server/Edge Function instead of exposing the key.
-*/
-const GEMINI_API_KEY =
-  "AQ.Ab8RN6KkCMB9S_OM_D18pF3XrfGLiFNVryMLDsEpa90j0XtHfA";
 
 /*
-  Gemini model.
-  The REST generateContent API supports model-specific
-  endpoints and structured JSON responses.
+  This is the latest Gemini key you supplied.
+
+  IMPORTANT:
+  Because this is a client-side application, the key can
+  technically be inspected by anyone using the website.
+  Use an Edge Function/server for production.
 */
-const GEMINI_MODEL = "gemini-2.5-flash-lite";
+const GEMINI_API_KEY =
+  "AQ.Ab8RN6Ij4iY4BlQQ5x8KIKJ9kuJw2QhkquVmu_9K3K3dyAr4Lw";
+
+
+/*
+  Current Gemini REST endpoint.
+
+  Authentication is intentionally NOT placed in ?key=.
+  It is sent through x-goog-api-key below.
+*/
+const GEMINI_MODEL =
+  "gemini-3.8-flash";
 
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 
 /* =========================================================
-   SUPABASE
+   SUPABASE CLIENT
 ========================================================= */
 
-const { createClient } = window.supabase;
+const {
+  createClient
+} = window.supabase;
 
-const supabaseClient =
+const db =
   createClient(
     SUPABASE_URL,
     SUPABASE_ANON_KEY
@@ -1429,10 +1648,10 @@ const app =
 const authForm =
   document.getElementById("authForm");
 
-const emailInput =
+const email =
   document.getElementById("email");
 
-const passwordInput =
+const password =
   document.getElementById("password");
 
 const authButton =
@@ -1450,44 +1669,44 @@ const signupTab =
 const authTitle =
   document.getElementById("authTitle");
 
-const authSubtitle =
-  document.getElementById("authSubtitle");
+const authDesc =
+  document.getElementById("authDesc");
 
-const logoutBtn =
-  document.getElementById("logoutBtn");
+const logoutButton =
+  document.getElementById("logoutButton");
 
-const routineInput =
-  document.getElementById("routineInput");
+const routine =
+  document.getElementById("routine");
 
-const generateBtn =
-  document.getElementById("generateBtn");
+const generateButton =
+  document.getElementById("generateButton");
 
-const tasksContainer =
-  document.getElementById("tasksContainer");
+const tasksElement =
+  document.getElementById("tasks");
 
-const totalTasksEl =
+const totalTasks =
   document.getElementById("totalTasks");
 
-const completedTasksEl =
+const completedTasks =
   document.getElementById("completedTasks");
 
-const progressPercentEl =
+const progressPercent =
   document.getElementById("progressPercent");
 
-const progressTextEl =
+const progressText =
   document.getElementById("progressText");
 
 const progressFill =
   document.getElementById("progressFill");
 
-const focusCountEl =
-  document.getElementById("focusCount");
-
-const todayDateEl =
+const todayDate =
   document.getElementById("todayDate");
 
-const loadingOverlay =
-  document.getElementById("loadingOverlay");
+const focusSessionsElement =
+  document.getElementById("focusSessions");
+
+const loading =
+  document.getElementById("loading");
 
 const loadingTitle =
   document.getElementById("loadingTitle");
@@ -1510,67 +1729,81 @@ let authMode = "login";
 let tasks = [];
 
 let focusSessions =
-  Number(localStorage.getItem("focusSessions") || 0);
+  Number(
+    localStorage.getItem(
+      "mission_focus_sessions"
+    ) || 0
+  );
 
-let pomoMode = "study";
+let timerMode = "study";
 
-let pomoSeconds = 25 * 60;
+let timerSeconds =
+  25 * 60;
 
-let pomoRunning = false;
+let timerRunning = false;
 
-let pomoInterval = null;
+let timerInterval = null;
+
+let toastTimeout = null;
 
 
 /* =========================================================
-   DATE
+   HELPERS
 ========================================================= */
 
-function getToday(){
+function today(){
 
-  const d = new Date();
+  const d =
+    new Date();
 
-  const year =
+  const y =
     d.getFullYear();
 
-  const month =
-    String(d.getMonth() + 1).padStart(2,"0");
+  const m =
+    String(
+      d.getMonth() + 1
+    ).padStart(2,"0");
 
   const day =
-    String(d.getDate()).padStart(2,"0");
+    String(
+      d.getDate()
+    ).padStart(2,"0");
 
-  return `${year}-${month}-${day}`;
+  return `${y}-${m}-${day}`;
 }
 
 
-function displayToday(){
+function escapeHTML(value){
 
-  const d = new Date();
+  return String(value)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 
-  todayDateEl.textContent =
-    d.toLocaleDateString(
-      "en-IN",
-      {
-        weekday:"long",
-        day:"numeric",
-        month:"short",
-        year:"numeric"
-      }
-    );
 }
 
 
-/* =========================================================
-   TOAST
-========================================================= */
+function escapeAttribute(value){
 
-let toastTimer;
+  return String(value)
+    .replaceAll("\\","\\\\")
+    .replaceAll("'","\\'")
+    .replaceAll("\n","\\n")
+    .replaceAll("\r","\\r");
+
+}
+
 
 function showToast(
   message,
-  type = ""
+  type=""
 ){
 
-  clearTimeout(toastTimer);
+  clearTimeout(
+    toastTimeout
+  );
 
   toast.textContent =
     message;
@@ -1578,76 +1811,68 @@ function showToast(
   toast.className =
     `show ${type}`;
 
-  toastTimer =
-    setTimeout(() => {
+  toastTimeout =
+    setTimeout(
+      () => {
+        toast.className = "";
+      },
+      3500
+    );
 
-      toast.className = "";
-
-    },3500);
 }
 
-
-/* =========================================================
-   AUTH MESSAGE
-========================================================= */
-
-function setAuthMessage(
-  message,
-  type = "error"
-){
-
-  authMessage.textContent =
-    message;
-
-  authMessage.className =
-    `auth-message ${type}`;
-}
-
-
-/* =========================================================
-   LOADING
-========================================================= */
 
 function setLoading(
-  visible,
-  title = "Building your strategy",
-  text = "Gemini is turning your routine into focused missions."
+  state,
+  title,
+  text
 ){
 
-  loadingOverlay.style.display =
-    visible ? "flex" : "none";
+  loading.style.display =
+    state
+      ? "flex"
+      : "none";
 
-  loadingTitle.textContent =
-    title;
+  if(title)
+    loadingTitle.textContent =
+      title;
 
-  loadingText.textContent =
-    text;
+  if(text)
+    loadingText.textContent =
+      text;
+
 }
 
 
 /* =========================================================
-   AUTH TABS
+   AUTH UI
 ========================================================= */
 
 loginTab.addEventListener(
   "click",
   () => {
 
-    authMode = "login";
+    authMode =
+      "login";
 
-    loginTab.classList.add("active");
-    signupTab.classList.remove("active");
+    loginTab.classList.add(
+      "active"
+    );
+
+    signupTab.classList.remove(
+      "active"
+    );
 
     authTitle.textContent =
       "Welcome back.";
 
-    authSubtitle.textContent =
+    authDesc.textContent =
       "Sign in to continue your daily study mission.";
 
     authButton.textContent =
       "Enter Mission Control";
 
-    setAuthMessage("");
+    authMessage.textContent = "";
 
   }
 );
@@ -1657,28 +1882,34 @@ signupTab.addEventListener(
   "click",
   () => {
 
-    authMode = "signup";
+    authMode =
+      "signup";
 
-    signupTab.classList.add("active");
-    loginTab.classList.remove("active");
+    signupTab.classList.add(
+      "active"
+    );
+
+    loginTab.classList.remove(
+      "active"
+    );
 
     authTitle.textContent =
       "Start your mission.";
 
-    authSubtitle.textContent =
+    authDesc.textContent =
       "Create an account and start tracking your preparation.";
 
     authButton.textContent =
       "Create Account";
 
-    setAuthMessage("");
+    authMessage.textContent = "";
 
   }
 );
 
 
 /* =========================================================
-   AUTH
+   LOGIN / SIGNUP
 ========================================================= */
 
 authForm.addEventListener(
@@ -1687,76 +1918,63 @@ authForm.addEventListener(
 
     event.preventDefault();
 
-    const email =
-      emailInput.value.trim();
+    const userEmail =
+      email.value.trim();
 
-    const password =
-      passwordInput.value;
+    const userPassword =
+      password.value;
 
-    if(!email || !password){
-
-      setAuthMessage(
-        "Enter your email and password."
-      );
-
+    if(!userEmail || !userPassword)
       return;
-    }
 
-    authButton.disabled = true;
+    authButton.disabled =
+      true;
 
-    authButton.textContent =
-      authMode === "login"
-        ? "Signing in..."
-        : "Creating account...";
+    authMessage.textContent = "";
 
     try{
 
       if(authMode === "login"){
 
-        const {
-          data,
-          error
-        } =
-          await supabaseClient.auth.signInWithPassword({
-            email,
-            password
+        const result =
+          await db.auth.signInWithPassword({
+            email:userEmail,
+            password:userPassword
           });
 
-        if(error)
-          throw error;
+        if(result.error)
+          throw result.error;
 
         currentUser =
-          data.user;
+          result.data.user;
 
-        showDashboard();
+        await openDashboard();
 
       }else{
 
-        const {
-          data,
-          error
-        } =
-          await supabaseClient.auth.signUp({
-            email,
-            password
+        const result =
+          await db.auth.signUp({
+            email:userEmail,
+            password:userPassword
           });
 
-        if(error)
-          throw error;
+        if(result.error)
+          throw result.error;
 
-        if(data.session){
+        if(result.data.session){
 
           currentUser =
-            data.user;
+            result.data.user;
 
-          showDashboard();
+          await openDashboard();
 
         }else{
 
-          setAuthMessage(
-            "Account created. Check your email to confirm your account.",
-            "success"
-          );
+          authMessage.textContent =
+            "Account created. Check your email to confirm it.";
+
+          authMessage.className =
+            "message success";
 
         }
 
@@ -1764,15 +1982,21 @@ authForm.addEventListener(
 
     }catch(error){
 
-      console.error(error);
-
-      setAuthMessage(
-        friendlyAuthError(error)
+      console.error(
+        "AUTH ERROR:",
+        error
       );
+
+      authMessage.textContent =
+        readableAuthError(error);
+
+      authMessage.className =
+        "message error";
 
     }finally{
 
-      authButton.disabled = false;
+      authButton.disabled =
+        false;
 
       authButton.textContent =
         authMode === "login"
@@ -1785,22 +2009,34 @@ authForm.addEventListener(
 );
 
 
-function friendlyAuthError(error){
+function readableAuthError(error){
 
-  const message =
-    String(error?.message || "");
+  const msg =
+    String(
+      error?.message || ""
+    );
 
-  if(message.toLowerCase().includes("invalid login credentials"))
+  if(
+    msg.toLowerCase()
+      .includes("invalid login credentials")
+  ){
+
     return "Incorrect email or password.";
 
-  if(message.toLowerCase().includes("user already registered"))
-    return "This email is already registered. Try Login.";
+  }
 
-  if(message.toLowerCase().includes("password"))
-    return message;
+  if(
+    msg.toLowerCase()
+      .includes("already registered")
+  ){
 
-  return message ||
-    "Authentication failed. Please try again.";
+    return "This email is already registered.";
+
+  }
+
+  return msg ||
+    "Authentication failed.";
+
 }
 
 
@@ -1808,39 +2044,56 @@ function friendlyAuthError(error){
    LOGOUT
 ========================================================= */
 
-logoutBtn.addEventListener(
+logoutButton.addEventListener(
   "click",
   async () => {
 
-    await supabaseClient.auth.signOut();
+    await db.auth.signOut();
 
     currentUser = null;
     tasks = [];
 
-    app.classList.add("hidden");
-    authScreen.classList.remove("hidden");
+    app.classList.add(
+      "hidden"
+    );
 
-    emailInput.value = "";
-    passwordInput.value = "";
-
-    setAuthMessage("");
+    authScreen.classList.remove(
+      "hidden"
+    );
 
   }
 );
 
 
 /* =========================================================
-   SHOW DASHBOARD
+   DASHBOARD
 ========================================================= */
 
-async function showDashboard(){
+async function openDashboard(){
 
-  authScreen.classList.add("hidden");
-  app.classList.remove("hidden");
+  authScreen.classList.add(
+    "hidden"
+  );
 
-  displayToday();
+  app.classList.remove(
+    "hidden"
+  );
 
-  updateFocusCount();
+  const date =
+    new Date();
+
+  todayDate.textContent =
+    date.toLocaleDateString(
+      "en-IN",
+      {
+        weekday:"long",
+        day:"numeric",
+        month:"short",
+        year:"numeric"
+      }
+    );
+
+  updateFocusSessions();
 
   await loadTasks();
 
@@ -1855,28 +2108,22 @@ async function restoreSession(){
 
   try{
 
-    const {
-      data,
-      error
-    } =
-      await supabaseClient.auth.getSession();
+    const result =
+      await db.auth.getSession();
 
-    if(error)
-      throw error;
-
-    if(data.session?.user){
+    if(result.data.session){
 
       currentUser =
-        data.session.user;
+        result.data.session.user;
 
-      showDashboard();
+      await openDashboard();
 
     }
 
   }catch(error){
 
     console.error(
-      "Session restore error:",
+      "SESSION ERROR:",
       error
     );
 
@@ -1885,8 +2132,8 @@ async function restoreSession(){
 }
 
 
-supabaseClient.auth.onAuthStateChange(
-  async (event, session) => {
+db.auth.onAuthStateChange(
+  (event, session) => {
 
     if(session?.user){
 
@@ -1900,7 +2147,7 @@ supabaseClient.auth.onAuthStateChange(
 
 
 /* =========================================================
-   LOAD TODAY'S TASKS
+   LOAD TASKS
 ========================================================= */
 
 async function loadTasks(){
@@ -1908,60 +2155,57 @@ async function loadTasks(){
   if(!currentUser)
     return;
 
-  tasksContainer.innerHTML = `
+  tasksElement.innerHTML = `
     <div class="empty">
       Loading today's missions...
     </div>
   `;
 
-  try{
+  const result =
+    await db
+      .from("tasks")
+      .select(
+        "id,user_id,task_date,subject,task_description,is_completed,created_at"
+      )
+      .eq(
+        "user_id",
+        currentUser.id
+      )
+      .eq(
+        "task_date",
+        today()
+      )
+      .order(
+        "created_at",
+        {
+          ascending:true
+        }
+      );
 
-    const {
-      data,
-      error
-    } =
-      await supabaseClient
-        .from("tasks")
-        .select(
-          "id,user_id,task_date,subject,task_description,is_completed,created_at"
-        )
-        .eq(
-          "user_id",
-          currentUser.id
-        )
-        .eq(
-          "task_date",
-          getToday()
-        )
-        .order(
-          "created_at",
-          {
-            ascending:true
-          }
-        );
+  if(result.error){
 
-    if(error)
-      throw error;
+    console.error(
+      "LOAD TASK ERROR:",
+      result.error
+    );
 
-    tasks =
-      data || [];
-
-    renderTasks();
-
-  }catch(error){
-
-    console.error(error);
-
-    tasksContainer.innerHTML = `
+    tasksElement.innerHTML = `
       <div class="empty">
-        Could not load today's missions.<br><br>
-        <small>${escapeHTML(error.message)}</small>
+        Could not load today's tasks.<br><br>
+        ${escapeHTML(result.error.message)}
       </div>
     `;
 
     updateProgress();
 
+    return;
+
   }
+
+  tasks =
+    result.data || [];
+
+  renderTasks();
 
 }
 
@@ -1974,7 +2218,7 @@ function renderTasks(){
 
   if(!tasks.length){
 
-    tasksContainer.innerHTML = `
+    tasksElement.innerHTML = `
       <div class="empty">
         No missions generated yet.<br>
         Enter your available study time above.
@@ -1987,43 +2231,63 @@ function renderTasks(){
 
   }
 
-  tasksContainer.innerHTML =
+
+  tasksElement.innerHTML =
     tasks.map(
-      (task,index) => `
+      (task,index) => {
 
-        <div
-          class="task ${task.is_completed ? "completed" : ""}"
-          data-id="${escapeHTML(String(task.id))}"
-        >
+        const id =
+          escapeAttribute(
+            task.id
+          );
 
-          <button
-            class="check"
-            aria-label="Complete task"
-            onclick="toggleTask('${escapeJS(String(task.id))}')"
+        return `
+
+          <div
+            class="task ${
+              task.is_completed
+                ? "completed"
+                : ""
+            }"
           >
-            ${task.is_completed ? "✓" : ""}
-          </button>
 
-          <div>
+            <button
+              class="check"
+              onclick="toggleTask('${id}')"
+            >
+              ${
+                task.is_completed
+                  ? "✓"
+                  : ""
+              }
+            </button>
 
-            <div class="task-subject">
-              ${escapeHTML(task.subject)}
+            <div>
+
+              <div class="subject">
+                ${escapeHTML(
+                  task.subject
+                )}
+              </div>
+
+              <div class="description">
+                ${escapeHTML(
+                  task.task_description
+                )}
+              </div>
+
             </div>
 
-            <div class="task-description">
-              ${escapeHTML(task.task_description)}
+            <div class="number">
+              #${index + 1}
             </div>
 
           </div>
 
-          <div class="task-number">
-            #${index + 1}
-          </div>
+        `;
 
-        </div>
-      `
-    )
-    .join("");
+      }
+    ).join("");
 
   updateProgress();
 
@@ -2031,39 +2295,40 @@ function renderTasks(){
 
 
 /* =========================================================
-   UPDATE TASK
+   TOGGLE TASK
 ========================================================= */
 
-async function toggleTask(taskId){
+window.toggleTask =
+  async function(taskId){
 
-  if(!currentUser)
-    return;
+    if(!currentUser)
+      return;
 
-  const task =
-    tasks.find(
-      t => String(t.id) === String(taskId)
-    );
+    const task =
+      tasks.find(
+        item =>
+          String(item.id) ===
+          String(taskId)
+      );
 
-  if(!task)
-    return;
+    if(!task)
+      return;
 
-  const newValue =
-    !task.is_completed;
+    const oldValue =
+      task.is_completed;
 
-  task.is_completed =
-    newValue;
+    task.is_completed =
+      !oldValue;
 
-  renderTasks();
+    renderTasks();
 
-  try{
 
-    const {
-      error
-    } =
-      await supabaseClient
+    const result =
+      await db
         .from("tasks")
         .update({
-          is_completed:newValue
+          is_completed:
+            task.is_completed
         })
         .eq(
           "id",
@@ -2074,26 +2339,27 @@ async function toggleTask(taskId){
           currentUser.id
         );
 
-    if(error)
-      throw error;
 
-  }catch(error){
+    if(result.error){
 
-    task.is_completed =
-      !newValue;
+      console.error(
+        "UPDATE TASK ERROR:",
+        result.error
+      );
 
-    renderTasks();
+      task.is_completed =
+        oldValue;
 
-    showToast(
-      "Could not update the task.",
-      "bad"
-    );
+      renderTasks();
 
-    console.error(error);
+      showToast(
+        "Could not update that task.",
+        "bad"
+      );
 
-  }
+    }
 
-}
+  };
 
 
 /* =========================================================
@@ -2107,24 +2373,29 @@ function updateProgress(){
 
   const completed =
     tasks.filter(
-      task => task.is_completed
+      task =>
+        task.is_completed
     ).length;
 
   const percentage =
     total
-      ? Math.round((completed / total) * 100)
+      ? Math.round(
+          completed /
+          total *
+          100
+        )
       : 0;
 
-  totalTasksEl.textContent =
+  totalTasks.textContent =
     total;
 
-  completedTasksEl.textContent =
+  completedTasks.textContent =
     completed;
 
-  progressPercentEl.textContent =
+  progressPercent.textContent =
     `${percentage}%`;
 
-  progressTextEl.textContent =
+  progressText.textContent =
     `${completed} / ${total}`;
 
   progressFill.style.width =
@@ -2134,38 +2405,95 @@ function updateProgress(){
 
 
 /* =========================================================
-   GEMINI
+   GEMINI PROMPT
 ========================================================= */
 
-const GEMINI_SYSTEM_INSTRUCTION = `
+const SYSTEM_INSTRUCTION = `
 You are a strict CBSE Class 10 study planner.
 
-Distribute tasks across:
-- Maths
-- Science
-- SST
-- English
-- Hindi B
-- AI 417
+Subjects:
+Maths
+Science
+SST
+English
+Hindi B
+AI 417
 
-based on the user's available time and requested routine.
+The user will tell you how much time they have and what they need
+to study today.
 
-Create realistic, specific and actionable study tasks.
+Create a realistic study plan.
 
 Return ONLY a JSON array.
 
-Every object MUST contain exactly these keys:
-"subject"
-"task_description"
+Each object MUST contain:
+{
+  "subject": "one of the six subjects",
+  "task_description": "specific actionable task"
+}
 
-Do not use markdown.
-Do not include explanations.
-Do not include code fences.
-Do not include the user's original routine in the response.
+Do not return markdown.
+Do not use code fences.
+Do not explain your answer.
+Do not include any extra keys.
+Do not repeat the user's routine.
 `;
 
 
-async function generateWithGemini(routine){
+/* =========================================================
+   GEMINI REQUEST
+========================================================= */
+
+async function askGemini(
+  userRoutine
+){
+
+  const requestBody = {
+
+    system_instruction:{
+      parts:[
+        {
+          text:
+            SYSTEM_INSTRUCTION
+        }
+      ]
+    },
+
+    contents:[
+      {
+        role:"user",
+
+        parts:[
+          {
+            text:
+              `Create today's study plan.
+
+User routine:
+${userRoutine}`
+          }
+        ]
+      }
+    ],
+
+    generationConfig:{
+      temperature:0.25,
+      responseMimeType:
+        "application/json"
+    }
+
+  };
+
+
+  /*
+    IMPORTANT:
+    The API key is NOT placed in the URL.
+
+    It is sent exactly through:
+    x-goog-api-key
+
+    This is the authentication format documented
+    by Google for the REST API.
+  */
 
   const response =
     await fetch(
@@ -2174,126 +2502,104 @@ async function generateWithGemini(routine){
         method:"POST",
 
         headers:{
-          "Content-Type":"application/json",
-          "x-goog-api-key":GEMINI_API_KEY
+          "Content-Type":
+            "application/json",
+
+          "x-goog-api-key":
+            GEMINI_API_KEY
         },
 
-        body:JSON.stringify({
-
-          system_instruction:{
-            parts:[
-              {
-                text:
-                  GEMINI_SYSTEM_INSTRUCTION
-              }
-            ]
-          },
-
-          contents:[
-            {
-              role:"user",
-
-              parts:[
-                {
-                  text:
-                    `Create today's study plan from this routine:\n${routine}`
-                }
-              ]
-            }
-          ],
-
-          generationConfig:{
-            temperature:0.25,
-            responseMimeType:"application/json",
-
-            responseSchema:{
-              type:"ARRAY",
-
-              items:{
-                type:"OBJECT",
-
-                properties:{
-                  subject:{
-                    type:"STRING"
-                  },
-
-                  task_description:{
-                    type:"STRING"
-                  }
-                },
-
-                required:[
-                  "subject",
-                  "task_description"
-                ]
-              }
-            }
-          }
-
-        })
+        body:
+          JSON.stringify(
+            requestBody
+          )
       }
     );
 
 
-  let payload = null;
+  let json;
 
   try{
-    payload =
+
+    json =
       await response.json();
+
   }catch{
-    payload = null;
+
+    throw new Error(
+      `Gemini returned an invalid HTTP response (${response.status}).`
+    );
+
   }
 
 
   if(!response.ok){
 
     console.error(
-      "Gemini API response:",
-      payload
+      "FULL GEMINI ERROR:",
+      json
     );
 
-    const apiMessage =
-      payload?.error?.message ||
-      `Gemini request failed (${response.status}).`;
+    const message =
+      json?.error?.message ||
+      "Gemini request failed.";
 
     if(
-      response.status === 400 ||
       response.status === 401 ||
       response.status === 403
     ){
 
       throw new Error(
-        `Gemini API error: ${apiMessage}`
+        `Gemini authentication failed: ${message}`
       );
 
     }
 
     throw new Error(
-      apiMessage
+      `Gemini API error (${response.status}): ${message}`
     );
 
   }
 
 
-  const rawText =
-    payload
+  const text =
+    json
       ?.candidates?.[0]
-      ?.content
-      ?.parts
+      ?.content?.parts
       ?.map(
-        part => part.text || ""
+        part =>
+          part.text || ""
       )
       .join("")
       .trim();
 
 
-  if(!rawText){
+  if(!text){
+
+    console.error(
+      "EMPTY GEMINI RESPONSE:",
+      json
+    );
 
     throw new Error(
-      "Gemini returned an empty study plan."
+      "Gemini returned an empty response."
     );
 
   }
+
+
+  /*
+    Sometimes an API response may contain accidental
+    markdown fences despite requesting JSON.
+    Remove them safely before parsing.
+  */
+
+  const cleaned =
+    text
+      .replace(/^```json\s*/i,"")
+      .replace(/^```\s*/i,"")
+      .replace(/\s*```$/,"")
+      .trim();
 
 
   let parsed;
@@ -2301,52 +2607,71 @@ async function generateWithGemini(routine){
   try{
 
     parsed =
-      JSON.parse(rawText);
+      JSON.parse(
+        cleaned
+      );
 
   }catch(error){
 
     console.error(
-      "Gemini raw output:",
-      rawText
+      "GEMINI RAW TEXT:",
+      text
     );
 
     throw new Error(
-      "Gemini returned invalid JSON."
+      "Gemini returned invalid JSON. Please try again."
     );
 
   }
 
 
-  if(!Array.isArray(parsed))
+  if(!Array.isArray(parsed)){
+
     throw new Error(
-      "Gemini did not return a task list."
+      "Gemini did not return a task array."
     );
 
+  }
 
-  const cleanTasks =
+
+  const validTasks =
     parsed
-      .map(item => ({
-        subject:
-          String(item.subject || "").trim(),
+      .map(
+        item => ({
 
-        task_description:
-          String(item.task_description || "").trim()
-      }))
+          subject:
+            String(
+              item?.subject || ""
+            ).trim(),
+
+          task_description:
+            String(
+              item?.task_description || ""
+            ).trim()
+
+        })
+      )
       .filter(
         item =>
           item.subject &&
           item.task_description
       )
-      .slice(0,30);
+      .slice(
+        0,
+        30
+      );
 
 
-  if(!cleanTasks.length)
+  if(!validTasks.length){
+
     throw new Error(
       "Gemini returned no usable tasks."
     );
 
+  }
 
-  return cleanTasks;
+
+  return validTasks;
 
 }
 
@@ -2355,19 +2680,18 @@ async function generateWithGemini(routine){
    GENERATE STRATEGY
 ========================================================= */
 
-generateBtn.addEventListener(
+generateButton.addEventListener(
   "click",
   generateStrategy
 );
 
 
-routineInput.addEventListener(
+routine.addEventListener(
   "keydown",
   event => {
 
     if(
-      event.key === "Enter" &&
-      !event.shiftKey
+      event.key === "Enter"
     ){
 
       event.preventDefault();
@@ -2394,25 +2718,27 @@ async function generateStrategy(){
   }
 
 
-  const routine =
-    routineInput.value.trim();
+  const userRoutine =
+    routine.value.trim();
 
 
-  if(!routine){
+  if(!userRoutine){
 
     showToast(
       "Tell me how much time you have today.",
       "bad"
     );
 
-    routineInput.focus();
+    routine.focus();
 
     return;
 
   }
 
 
-  if(routine.length < 8){
+  if(
+    userRoutine.length < 8
+  ){
 
     showToast(
       "Give the planner a little more detail.",
@@ -2424,17 +2750,17 @@ async function generateStrategy(){
   }
 
 
-  generateBtn.disabled =
+  generateButton.disabled =
     true;
 
-  generateBtn.textContent =
+  generateButton.textContent =
     "Planning...";
 
 
   setLoading(
     true,
     "Building your strategy",
-    "Gemini is converting your available time into focused missions."
+    "Gemini is creating focused study missions."
   );
 
 
@@ -2442,52 +2768,48 @@ async function generateStrategy(){
 
     /*
       IMPORTANT:
-      The routine is NOT saved.
-      It is sent only to Gemini.
+      userRoutine is sent to Gemini.
+      It is NEVER inserted into Supabase.
     */
 
-    const aiTasks =
-      await generateWithGemini(routine);
+    const generatedTasks =
+      await askGemini(
+        userRoutine
+      );
 
 
     setLoading(
       true,
       "Saving missions",
-      "Your generated tasks are being added to today's command centre."
+      "Adding the generated tasks to today's dashboard."
     );
 
 
     const rows =
-      aiTasks.map(
-        task => ({
+      generatedTasks.map(
+        item => ({
+
           user_id:
             currentUser.id,
 
           task_date:
-            getToday(),
+            today(),
 
           subject:
-            task.subject,
+            item.subject,
 
           task_description:
-            task.task_description,
+            item.task_description,
 
           is_completed:
             false
+
         })
       );
 
 
-    /*
-      Only AI-generated task fields
-      are inserted into Supabase.
-    */
-
-    const {
-      data,
-      error
-    } =
-      await supabaseClient
+    const result =
+      await db
         .from("tasks")
         .insert(rows)
         .select(
@@ -2495,28 +2817,23 @@ async function generateStrategy(){
         );
 
 
-    if(error)
-      throw error;
+    if(result.error)
+      throw result.error;
 
-
-    /*
-      Add newly created missions
-      to current task list.
-    */
 
     tasks =
       [
         ...tasks,
-        ...(data || [])
+        ...(result.data || [])
       ];
 
 
     renderTasks();
 
-    routineInput.value = "";
+    routine.value = "";
 
     showToast(
-      `${data?.length || aiTasks.length} missions added to today's plan.`,
+      `${result.data?.length || generatedTasks.length} study missions added.`,
       "good"
     );
 
@@ -2524,24 +2841,26 @@ async function generateStrategy(){
   }catch(error){
 
     console.error(
-      "Strategy generation error:",
+      "STRATEGY ERROR:",
       error
     );
 
     showToast(
-      error.message ||
-      "Could not generate the strategy.",
+      error?.message ||
+      "Could not generate your strategy.",
       "bad"
     );
 
   }finally{
 
-    setLoading(false);
+    setLoading(
+      false
+    );
 
-    generateBtn.disabled =
+    generateButton.disabled =
       false;
 
-    generateBtn.textContent =
+    generateButton.textContent =
       "Generate Strategy";
 
   }
@@ -2553,153 +2872,164 @@ async function generateStrategy(){
    POMODORO
 ========================================================= */
 
-const timerEl =
+const timer =
   document.getElementById("timer");
 
-const pomoModeEl =
-  document.getElementById("pomoMode");
+const timerModeElement =
+  document.getElementById("timerMode");
 
-const pomoRing =
-  document.getElementById("pomoRing");
+const ring =
+  document.getElementById("ring");
 
-const startPauseBtn =
-  document.getElementById("startPauseBtn");
+const startPause =
+  document.getElementById("startPause");
 
-const resetTimerBtn =
-  document.getElementById("resetTimerBtn");
+const resetTimer =
+  document.getElementById("resetTimer");
 
-const studyModeBtn =
-  document.getElementById("studyModeBtn");
+const studyMode =
+  document.getElementById("studyMode");
 
-const breakModeBtn =
-  document.getElementById("breakModeBtn");
-
-
-function setPomoMode(mode){
-
-  stopTimer();
-
-  pomoMode =
-    mode;
-
-  pomoSeconds =
-    mode === "study"
-      ? 25 * 60
-      : 5 * 60;
-
-  pomoModeEl.textContent =
-    mode === "study"
-      ? "Study"
-      : "Coffee Break";
-
-  studyModeBtn.classList.toggle(
-    "active",
-    mode === "study"
-  );
-
-  breakModeBtn.classList.toggle(
-    "active",
-    mode === "break"
-  );
-
-  startPauseBtn.textContent =
-    "Start";
-
-  updateTimerUI();
-
-}
+const breakMode =
+  document.getElementById("breakMode");
 
 
-function updateTimerUI(){
+function updateTimer(){
 
   const minutes =
     Math.floor(
-      pomoSeconds / 60
+      timerSeconds / 60
     );
 
   const seconds =
-    pomoSeconds % 60;
+    timerSeconds % 60;
 
-  timerEl.textContent =
+  timer.textContent =
     `${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
 
 
   const total =
-    pomoMode === "study"
+    timerMode === "study"
       ? 25 * 60
       : 5 * 60;
 
   const elapsed =
-    total - pomoSeconds;
+    total - timerSeconds;
 
   const percent =
-    Math.min(
-      100,
-      Math.max(
-        0,
-        (elapsed / total) * 100
+    Math.max(
+      0,
+      Math.min(
+        100,
+        elapsed /
+        total *
+        100
       )
     );
 
-  pomoRing.style.setProperty(
-    "--progress",
+
+  ring.style.setProperty(
+    "--percent",
     `${percent}%`
   );
 
 }
 
 
+function selectTimerMode(
+  mode
+){
+
+  stopTimer();
+
+  timerMode =
+    mode;
+
+  timerSeconds =
+    mode === "study"
+      ? 25 * 60
+      : 5 * 60;
+
+  timerModeElement.textContent =
+    mode === "study"
+      ? "Study"
+      : "Coffee Break";
+
+  studyMode.classList.toggle(
+    "active",
+    mode === "study"
+  );
+
+  breakMode.classList.toggle(
+    "active",
+    mode === "break"
+  );
+
+  updateTimer();
+
+}
+
+
 function startTimer(){
 
-  if(pomoRunning)
+  if(timerRunning)
     return;
 
-  pomoRunning =
+  timerRunning =
     true;
 
-  startPauseBtn.textContent =
+  startPause.textContent =
     "Pause";
 
 
-  pomoInterval =
+  timerInterval =
     setInterval(
       () => {
 
-        pomoSeconds--;
+        timerSeconds--;
 
-        updateTimerUI();
+        updateTimer();
 
 
-        if(pomoSeconds <= 0){
+        if(
+          timerSeconds <= 0
+        ){
 
           stopTimer();
 
-          if(pomoMode === "study"){
+
+          if(
+            timerMode === "study"
+          ){
 
             focusSessions++;
 
             localStorage.setItem(
-              "focusSessions",
+              "mission_focus_sessions",
               focusSessions
             );
 
-            updateFocusCount();
+            updateFocusSessions();
 
             showToast(
-              "Study session complete. Time for a 5-minute Coffee Break.",
+              "Study complete. Take a 5-minute Coffee Break.",
               "good"
             );
 
-            setPomoMode("break");
+            selectTimerMode(
+              "break"
+            );
 
           }else{
 
             showToast(
-              "Break complete. Ready for another Study session?",
+              "Break complete. Ready to study?",
               "good"
             );
 
-            setPomoMode("study");
+            selectTimerMode(
+              "study"
+            );
 
           }
 
@@ -2714,41 +3044,41 @@ function startTimer(){
 
 function stopTimer(){
 
-  pomoRunning =
+  timerRunning =
     false;
 
   clearInterval(
-    pomoInterval
+    timerInterval
   );
 
-  pomoInterval =
+  timerInterval =
     null;
 
-  startPauseBtn.textContent =
+  startPause.textContent =
     "Start";
 
 }
 
 
-function resetTimer(){
+function resetPomodoro(){
 
   stopTimer();
 
-  pomoSeconds =
-    pomoMode === "study"
+  timerSeconds =
+    timerMode === "study"
       ? 25 * 60
       : 5 * 60;
 
-  updateTimerUI();
+  updateTimer();
 
 }
 
 
-startPauseBtn.addEventListener(
+startPause.addEventListener(
   "click",
   () => {
 
-    if(pomoRunning)
+    if(timerRunning)
       stopTimer();
 
     else
@@ -2758,68 +3088,41 @@ startPauseBtn.addEventListener(
 );
 
 
-resetTimerBtn.addEventListener(
+resetTimer.addEventListener(
   "click",
-  resetTimer
+  resetPomodoro
 );
 
 
-studyModeBtn.addEventListener(
+studyMode.addEventListener(
   "click",
-  () => setPomoMode("study")
+  () =>
+    selectTimerMode("study")
 );
 
 
-breakModeBtn.addEventListener(
+breakMode.addEventListener(
   "click",
-  () => setPomoMode("break")
+  () =>
+    selectTimerMode("break")
 );
 
 
-function updateFocusCount(){
+function updateFocusSessions(){
 
-  focusCountEl.textContent =
+  focusSessionsElement.textContent =
     focusSessions;
 
 }
 
 
 /* =========================================================
-   SECURITY / HTML ESCAPING
+   INITIALIZATION
 ========================================================= */
 
-function escapeHTML(value){
+updateTimer();
 
-  return String(value)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-
-}
-
-
-function escapeJS(value){
-
-  return String(value)
-    .replaceAll("\\","\\\\")
-    .replaceAll("'","\\'")
-    .replaceAll("\n","\\n")
-    .replaceAll("\r","\\r");
-
-}
-
-
-/* =========================================================
-   START
-========================================================= */
-
-updateTimerUI();
-
-updateFocusCount();
-
-displayToday();
+updateFocusSessions();
 
 restoreSession();
 
