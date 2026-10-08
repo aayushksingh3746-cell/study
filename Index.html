@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#070d18">
+  <title>Pre-Board Mission Control</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+    :root {
+      --bg: #050a12;
+      --bg-2: #08111f;
+      --panel: rgba(12, 23, 39, .82);
+      --panel-strong: #0c1727;
+      --border: rgba(148, 163, 184, .13);
+      --text: #edf5ff;
+      --muted: #8fa2b8;
+      --blue: #5ea7ff;
+      --blue-2: #347eea;
+      --cyan: #61d5ff;
+      --green: #4ade80;
+      --red: #fb7185;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .38);
+      --radius: 20px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "DM Sans", sans-serif;
+      background:
+        radial-gradient(circle at 80% -10%, rgba(43, 104, 180, .20), transparent 32%),
+        radial-gradient(circle at -10% 80%, rgba(30, 75, 125, .13), transparent 30%),
+        linear-gradient(145deg, #030811, #07111e 55%, #040911);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .16;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 90%);
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* AUTH */
+
+    #authScreen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .auth-card {
+      width: min(430px, 100%);
+      padding: 34px;
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      background: rgba(8, 17, 30, .88);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      margin-bottom: 22px;
+      background: linear-gradient(135deg, #5ea7ff, #2764bb);
+      color: white;
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      box-shadow: 0 12px 35px rgba(62, 139, 239, .25);
+    }
+
+    .auth-card h1 {
+      font: 700 28px "Space Grotesk";
+      letter-spacing: -.8px;
+    }
+
+    .auth-card > p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .auth-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin: 28px 0 20px;
+      padding: 4px;
+      border-radius: 12px;
+      background: #07101d;
+    }
+
+    .auth-tabs button {
+      border: 0;
+      border-radius: 9px;
+      padding: 10px;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .auth-tabs button.active {
+      background: #162a43;
+      color: white;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 7px;
+      color: #b6c5d6;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .field input {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      outline: none;
+      color: white;
+      background: #07111e;
+      transition: .2s;
+    }
+
+    .field input:focus {
+      border-color: rgba(94,167,255,.65);
+      box-shadow: 0 0 0 3px rgba(94,167,255,.08);
+    }
+
+    .primary-btn {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 16px;
+      color: white;
+      background: linear-gradient(135deg, #4c98f5, #2869bd);
+      font-weight: 700;
+      transition: .2s;
+    }
+
+    .primary-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+
+    .auth-message {
+      min-height: 20px;
+      margin-top: 13px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* APP */
+
+    #app {
+      min-height: 100vh;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid var(--border);
+      background: rgba(4, 10, 18, .76);
+      backdrop-filter: blur(18px);
+    }
+
+    .header-inner {
+      width: min(1440px, calc(100% - 40px));
+      margin: auto;
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+    }
+
+    .mini-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      background: #102744;
+      color: var(--cyan);
+      font-family: "Space Grotesk";
+      font-weight: 700;
+    }
+
+    .header-title h1 {
+      font: 600 18px "Space Grotesk";
+      letter-spacing: -.3px;
+    }
+
+    .header-title span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-pill {
+      max-width: 210px;
+      overflow: hidden;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      color: #b8c9dc;
+      background: #081321;
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .logout-btn {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 13px;
+      color: #b8c9dc;
+      background: transparent;
+      font-size: 12px;
+    }
+
+    .container {
+      width: min(1440px, calc(100% - 40px));
+      margin: auto;
+      padding: 38px 0 70px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.5fr .8fr;
+      gap: 22px;
+      margin-bottom: 22px;
+    }
+
+    .hero-card,
+    .timer-card,
+    .tasks-card,
+    .stat-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero-card {
+      min-height: 270px;
+      padding: 34px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      width: 360px;
+      height: 360px;
+      right: -140px;
+      top: -150px;
+      border-radius: 50%;
+      border: 1px solid rgba(97,213,255,.09);
+      box-shadow:
+        0 0 0 50px rgba(97,213,255,.018),
+        0 0 0 100px rgba(97,213,255,.012);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .hero-card h2 {
+      max-width: 720px;
+      margin-top: 10px;
+      font: 700 clamp(30px, 4vw, 54px) "Space Grotesk";
+      line-height: 1.02;
+      letter-spacing: -2px;
+    }
+
+    .hero-card p {
+      max-width: 680px;
+      margin-top: 14px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .generator {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .generator input {
+      min-width: 0;
+      flex: 1;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      outline: none;
+      color: white;
+      background: rgba(2,8,16,.72);
+    }
+
+    .generator input:focus {
+      border-color: rgba(97,213,255,.45);
+    }
+
+    .generate-btn {
+      flex-shrink: 0;
+      border: 0;
+      border-radius: 12px;
+      padding: 0 19px;
+      color: #03101a;
+      background: var(--cyan);
+      font-weight: 800;
+      transition: .2s;
+    }
+
+    .generate-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 28px rgba(97,213,255,.16);
+    }
+
+    .generate-btn.loading {
+      pointer-events: none;
+      opacity: .7;
+    }
+
+    /* TIMER */
+
+    .timer-card {
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .timer-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .timer-top h3 {
+      font: 600 17px "Space Grotesk";
+    }
+
+    .timer-mode {
+      color: var(--cyan);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .timer-display {
+      margin: 24px 0;
+      font: 700 clamp(48px, 6vw, 72px) "Space Grotesk";
+      letter-spacing: -4px;
+      text-align: center;
+    }
+
+    .timer-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .timer-controls button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px;
+      color: #dce8f5;
+      background: #0a1727;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .timer-controls button.primary {
+      border-color: transparent;
+      color: #06111d;
+      background: var(--cyan);
+    }
+
+    /* STATS */
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .stat-card {
+      padding: 20px 22px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+    }
+
+    .stat-value {
+      margin-top: 8px;
+      font: 700 28px "Space Grotesk";
+    }
+
+    .progress-wrap {
+      margin-top: 13px;
+      height: 7px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #07111e;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #4d96f2, #61d5ff);
+      transition: width .4s cubic-bezier(.2,.8,.2,1);
+    }
+
+    /* TASKS */
+
+    .tasks-card {
+      overflow: hidden;
+    }
+
+    .tasks-header {
+      padding: 24px 25px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .tasks-header h3 {
+      font: 600 18px "Space Grotesk";
+    }
+
+    .tasks-header p {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .date-label {
+      padding: 8px 11px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: #aebed0;
+      background: #081321;
+      font-size: 11px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      padding: 13px 22px;
+      color: #73879e;
+      background: rgba(4,10,18,.35);
+      font-size: 10px;
+      text-align: left;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    td {
+      padding: 16px 22px;
+      border-top: 1px solid rgba(148,163,184,.08);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    tbody tr {
+      transition: background .2s;
+    }
+
+    tbody tr:hover {
+      background: rgba(94,167,255,.035);
+    }
+
+    .subject {
+      width: 150px;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .task-text {
+      color: #dce7f4;
+      line-height: 1.5;
+    }
+
+    tr.completed .task-text {
+      color: #607287;
+      text-decoration: line-through;
+      text-decoration-thickness: 1px;
+    }
+
+    .check-cell {
+      width: 60px;
+      text-align: center;
+    }
+
+    .check {
+      width: 20px;
+      height: 20px;
+      appearance: none;
+      border: 1px solid #45617d;
+      border-radius: 6px;
+      background: #081321;
+      cursor: pointer;
+      vertical-align: middle;
+      position: relative;
+      transition: .2s;
+    }
+
+    .check:hover {
+      border-color: var(--cyan);
+    }
+
+    .check:checked {
+      border-color: var(--green);
+      background: var(--green);
+    }
+
+    .check:checked::after {
+      content: "";
+      position: absolute;
+      width: 5px;
+      height: 9px;
+      left: 6px;
+      top: 3px;
+      border-right: 2px solid #05210e;
+      border-bottom: 2px solid #05210e;
+      transform: rotate(45deg);
+    }
+
+    .empty-state {
+      padding: 65px 20px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-state strong {
+      display: block;
+      margin-bottom: 7px;
+      color: #cbd8e6;
+      font-size: 15px;
+    }
+
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 100;
+      max-width: min(380px, calc(100% - 44px));
+      padding: 13px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: #dce9f7;
+      background: #0b1829;
+      box-shadow: var(--shadow);
+      transform: translateY(30px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .3s;
+      font-size: 13px;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.error {
+      border-color: rgba(251,113,133,.25);
+      color: #fecdd3;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      margin-right: 7px;
+      vertical-align: -2px;
+      border: 2px solid rgba(0,0,0,.25);
+      border-top-color: #03101a;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .timer-card {
+        min-height: 280px;
+      }
+    }
+
+    @media (max-width: 650px) {
+      .header-inner,
+      .container {
+        width: min(100% - 24px, 1440px);
+      }
+
+      .header-inner {
+        min-height: 68px;
+      }
+
+      .user-pill {
+        display: none;
+      }
+
+      .hero-card,
+      .timer-card {
+        padding: 23px;
+      }
+
+      .hero-card h2 {
+        font-size: 34px;
+        letter-spacing: -1.5px;
+      }
+
+      .generator {
+        flex-direction: column;
+      }
+
+      .generate-btn {
+        min-height: 48px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .tasks-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      th, td {
+        padding: 14px 15px;
+      }
+
+      .subject {
+        width: 110px;
+      }
+
+      .auth-card {
+        padding: 25px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- AUTH SCREEN -->
+  <section id="authScreen">
+    <div class="auth-card">
+      <div class="brand-mark">10</div>
+
+      <h1>Pre-Board Mission Control</h1>
+      <p>Your private Class 10 command center for planning, studying and tracking progress.</p>
+
+      <div class="auth-tabs">
+        <button id="loginTab" class="active" type="button">Login</button>
+        <button id="signupTab" type="button">Create Account</button>
+      </div>
+
+      <form id="authForm">
+        <div class="field">
+          <label>Email</label>
+          <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" required>
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimum 6 characters" required minlength="6">
+        </div>
+
+        <button id="authButton" class="primary-btn" type="submit">Login</button>
+      </form>
+
+      <div id="authMessage" class="auth-message"></div>
+    </div>
+  </section>
+
+  <!-- MAIN APP -->
+  <div id="app" class="hidden">
+
+    <header>
+      <div class="header-inner">
+        <div class="header-title">
+          <div class="mini-mark">10</div>
+          <div>
+            <h1>Pre-Board Mission Control</h1>
+            <span>Class 10 • Study Operations</span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <div id="userEmail" class="user-pill"></div>
+          <button id="logoutBtn" class="logout-btn">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+
+      <section class="hero">
+        <div class="hero-card">
+          <div>
+            <div class="eyebrow">Daily Strategy Engine</div>
+            <h2>Turn your available time into a mission.</h2>
+            <p>
+              Tell the planner how much time you have and what you need to accomplish.
+              Gemini will create a focused CBSE Class 10 study strategy.
+            </p>
+          </div>
+
+          <form id="generatorForm" class="generator">
+            <input
+              id="routineInput"
+              type="text"
+              maxlength="1000"
+              placeholder="e.g. I have 4 hours tonight and need to prepare for Science and Maths..."
+              required
+            >
+            <button id="generateBtn" class="generate-btn" type="submit">
+              Generate Strategy
+            </button>
+          </form>
+        </div>
+
+        <aside class="timer-card">
+          <div class="timer-top">
+            <h3>Focus Timer</h3>
+            <span id="timerMode" class="timer-mode">Study Mode</span>
+          </div>
+
+          <div id="timerDisplay" class="timer-display">25:00</div>
+
+          <div class="timer-controls">
+            <button id="studyModeBtn" class="primary" type="button">25m Study</button>
+            <button id="breakModeBtn" type="button">5m Break</button>
+            <button id="timerStartBtn" type="button">Start</button>
+            <button id="timerResetBtn" type="button">Reset</button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="stats">
+        <div class="stat-card">
+          <div class="stat-label">Today's Tasks</div>
+          <div id="totalTasks" class="stat-value">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Completed</div>
+          <div id="completedTasks" class="stat-value">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Mission Progress</div>
+          <div id="progressPercent" class="stat-value">0%</div>
+          <div class="progress-wrap">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tasks-card">
+        <div class="tasks-header">
+          <div>
+            <h3>Today's Mission</h3>
+            <p>Your generated study checklist for today.</p>
+          </div>
+          <div id="dateLabel" class="date-label"></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Done</th>
+                <th>Subject</th>
+                <th>Task</th>
+              </tr>
+            </thead>
+            <tbody id="tasksBody"></tbody>
+          </table>
+
+          <div id="emptyState" class="empty-state">
+            <strong>No missions scheduled.</strong>
+            Enter your available study time above and generate your strategy.
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIGURATION
+   ========================================================= */
+
+const SUPABASE_URL = "https://hceffrbjvozqkltrgxou.supabase.co";
+
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmxlIiwicmVmIjoiaGNlZmZyYmp2b3pxa2x0cmd4b3UiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc5MTQyMTU4NiwgImV4cCI6MjEwNjk5NzU4Nn0.lBh9Gxf9HnfUUJa0LFgzCahHEBVPIgPFRYljz0vRMS4";
+
+const GEMINI_ENDPOINT =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6L0qv8ZjuZ5jII1M0U66K_lu_5xWCsMdyTHrMb8gGuvcQ";
+
+const { createClient } = window.supabase;
+
+const supabaseClient = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+
+
+/* =========================================================
+   DOM
+   ========================================================= */
+
+const authScreen = document.getElementById("authScreen");
+const app = document.getElementById("app");
+
+const loginTab = document.getElementById("loginTab");
+const signupTab = document.getElementById("signupTab");
+const authForm = document.getElementById("authForm");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authButton = document.getElementById("authButton");
+const authMessage = document.getElementById("authMessage");
+
+const userEmail = document.getElementById("userEmail");
+const logoutBtn = document.getElementById("logoutBtn");
+
+const generatorForm = document.getElementById("generatorForm");
+const routineInput = document.getElementById("routineInput");
+const generateBtn = document.getElementById("generateBtn");
+
+const tasksBody = document.getElementById("tasksBody");
+const emptyState = document.getElementById("emptyState");
+
+const totalTasks = document.getElementById("totalTasks");
+const completedTasks = document.getElementById("completedTasks");
+const progressPercent = document.getElementById("progressPercent");
+const progressBar = document.getElementById("progressBar");
+
+const dateLabel = document.getElementById("dateLabel");
+
+const toast = document.getElementById("toast");
+
+const timerDisplay = document.getElementById("timerDisplay");
+const timerMode = document.getElementById("timerMode");
+const timerStartBtn = document.getElementById("timerStartBtn");
+const timerResetBtn = document.getElementById("timerResetBtn");
+const studyModeBtn = document.getElementById("studyModeBtn");
+const breakModeBtn = document.getElementById("breakModeBtn");
+
+
+/* =========================================================
+   STATE
+   ========================================================= */
+
+let currentUser = null;
+let authMode = "login";
+
+let tasks = [];
+
+let timerSeconds = 25 * 60;
+let timerInterval = null;
+let timerRunning = false;
+let currentTimerMode = "study";
+
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function todayISO() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function showToast(message, isError = false) {
+  toast.textContent = message;
+  toast.classList.toggle("error", isError);
+  toast.classList.add("show");
+
+  clearTimeout(showToast.timeout);
+
+  showToast.timeout = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 3200);
+}
+
+function escapeHTML(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDate() {
+  const date = new Date();
+
+  dateLabel.textContent = date.toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+
+/* =========================================================
+   AUTH UI
+   ========================================================= */
+
+loginTab.addEventListener("click", () => {
+  authMode = "login";
+
+  loginTab.classList.add("active");
+  signupTab.classList.remove("active");
+
+  authButton.textContent = "Login";
+  authMessage.textContent = "";
+});
+
+signupTab.addEventListener("click", () => {
+  authMode = "signup";
+
+  signupTab.classList.add("active");
+  loginTab.classList.remove("active");
+
+  authButton.textContent = "Create Account";
+  authMessage.textContent = "";
+});
+
+
+/* =========================================================
+   AUTHENTICATION
+   ========================================================= */
+
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+
+  if (!email || !password) {
+    authMessage.textContent = "Enter your email and password.";
+    return;
+  }
+
+  authButton.disabled = true;
+  authButton.textContent =
+    authMode === "login" ? "Logging in..." : "Creating...";
+
+  authMessage.textContent = "";
+
+  try {
+
+    if (authMode === "signup") {
+
+      const { data, error } =
+        await supabaseClient.auth.signUp({
+          email,
+          password
+        });
+
+      if (error) throw error;
+
+      if (!data.session) {
+        authMessage.textContent =
+          "Account created. Check your email if confirmation is enabled.";
+      } else {
+        showApp(data.session.user);
+      }
+
+    } else {
+
+      const { data, error } =
+        await supabaseClient.auth.signInWithPassword({
+          email,
+          password
+        });
+
+      if (error) throw error;
+
+      showApp(data.user);
+    }
+
+  } catch (error) {
+    console.error(error);
+    authMessage.textContent =
+      error.message || "Authentication failed.";
+  } finally {
+    authButton.disabled = false;
+    authButton.textContent =
+      authMode === "login" ? "Login" : "Create Account";
+  }
+});
+
+
+logoutBtn.addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+});
+
+
+function showApp(user) {
+  currentUser = user;
+
+  authScreen.classList.add("hidden");
+  app.classList.remove("hidden");
+
+  userEmail.textContent = user.email || "Authenticated user";
+
+  formatDate();
+  loadTodaysTasks();
+}
+
+
+/* =========================================================
+   AUTH SESSION LISTENER
+   ========================================================= */
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+
+  if (session?.user) {
+    showApp(session.user);
+  } else {
+    currentUser = null;
+
+    app.classList.add("hidden");
+    authScreen.classList.remove("hidden");
+  }
+});
+
+
+/* =========================================================
+   SUPABASE TASK FUNCTIONS
+   ========================================================= */
+
+/*
+  IMPORTANT:
+
+  Every SELECT / INSERT / UPDATE contains user_id filtering.
+
+  Your Supabase database should have:
+    tasks
+      id
+      user_id
+      task_date
+      subject
+      task_description
+      is_completed
+      created_at
+
+  RLS should also enforce ownership server-side.
+*/
+
+
+async function selectTodaysTasks() {
+
+  if (!currentUser) return [];
+
+  const { data, error } = await supabaseClient
+    .from("tasks")
+    .select("*")
+    .eq("user_id", currentUser.id)
+    .eq("task_date", todayISO())
+    .order("id", { ascending: true });
+
+  if (error) throw error;
+
+  return data || [];
+}
+
+
+async function insertTasks(generatedTasks) {
+
+  if (!currentUser) {
+    throw new Error("You must be logged in.");
+  }
+
+  const rows = generatedTasks.map(item => ({
+    user_id: currentUser.id,
+    task_date: todayISO(),
+    subject: item.subject,
+    task_description: item.task_description,
+    is_completed: false
+  }));
+
+  if (!rows.length) return [];
+
+  const { data, error } = await supabaseClient
+    .from("tasks")
+    .insert(rows)
+    .select();
+
+  if (error) throw error;
+
+  return data || [];
+}
+
+
+async function updateTaskCompletion(taskId, isCompleted) {
+
+  if (!currentUser) {
+    throw new Error("You must be logged in.");
+  }
+
+  const { data, error } = await supabaseClient
+    .from("tasks")
+    .update({
+      is_completed: isCompleted
+    })
+    .eq("id", taskId)
+    .eq("user_id", currentUser.id)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return data;
+}
+
+
+/* =========================================================
+   LOAD TASKS
+   ========================================================= */
+
+async function loadTodaysTasks() {
+
+  try {
+
+    tasksBody.innerHTML = "";
+
+    const data = await selectTodaysTasks();
+
+    tasks = data;
+
+    renderTasks();
+
+  } catch (error) {
+
+    console.error("Task loading error:", error);
+
+    showToast(
+      "Could not load today's tasks. Check your Supabase table/RLS configuration.",
+      true
+    );
+
+    tasks = [];
+    renderTasks();
+  }
+}
+
+
+/* =========================================================
+   RENDER TASKS
+   ========================================================= */
+
+function renderTasks() {
+
+  tasksBody.innerHTML = "";
+
+  if (!tasks.length) {
+    emptyState.classList.remove("hidden");
+  } else {
+    emptyState.classList.add("hidden");
+  }
+
+  tasks.forEach(task => {
+
+    const row = document.createElement("tr");
+
+    if (task.is_completed) {
+      row.classList.add("completed");
+    }
+
+    row.innerHTML = `
+      <td class="check-cell">
+        <input
+          class="check"
+          type="checkbox"
+          ${task.is_completed ? "checked" : ""}
+          aria-label="Complete task"
+        >
+      </td>
+
+      <td class="subject">
+        ${escapeHTML(task.subject)}
+      </td>
+
+      <td class="task-text">
+        ${escapeHTML(task.task_description)}
+      </td>
+    `;
+
+    const checkbox = row.querySelector(".check");
+
+    checkbox.addEventListener("change", async () => {
+
+      const newValue = checkbox.checked;
+
+      checkbox.disabled = true;
+
+      try {
+
+        const updatedTask =
+          await updateTaskCompletion(task.id, newValue);
+
+        const index =
+          tasks.findIndex(item => item.id === task.id);
+
+        if (index !== -1) {
+          tasks[index] = updatedTask;
+        }
+
+        renderTasks();
+
+        showToast(
+          newValue
+            ? "Mission completed. Excellent work."
+            : "Mission marked incomplete."
+        );
+
+      } catch (error) {
+
+        console.error(error);
+
+        checkbox.checked = !newValue;
+
+        showToast(
+          "Could not update the task.",
+          true
+        );
+
+      } finally {
+        checkbox.disabled = false;
+      }
+
+    });
+
+    tasksBody.appendChild(row);
+  });
+
+  updateProgress();
+}
+
+
+/* =========================================================
+   PROGRESS
+   ========================================================= */
+
+function updateProgress() {
+
+  const total = tasks.length;
+
+  const completed =
+    tasks.filter(task => task.is_completed).length;
+
+  const percentage =
+    total === 0
+      ? 0
+      : Math.round((completed / total) * 100);
+
+  totalTasks.textContent = total;
+  completedTasks.textContent = completed;
+  progressPercent.textContent = `${percentage}%`;
+  progressBar.style.width = `${percentage}%`;
+}
+
+
+/* =========================================================
+   GEMINI STRATEGY GENERATOR
+   ========================================================= */
+
+generatorForm.addEventListener("submit", async (event) => {
+
+  event.preventDefault();
+
+  if (!currentUser) {
+    showToast("Please log in first.", true);
+    return;
+  }
+
+  const routine = routineInput.value.trim();
+
+  if (!routine) {
+    showToast("Tell the planner how much time you have.", true);
+    return;
+  }
+
+  /*
+    CRITICAL PRIVACY ARCHITECTURE:
+
+    The raw routine is used ONLY as the Gemini request input.
+    It is NOT inserted into Supabase.
+  */
+
+  generateBtn.disabled = true;
+  generateBtn.classList.add("loading");
+
+  generateBtn.innerHTML =
+    `<span class="spinner"></span>Planning...`;
+
+  try {
+
+    const generatedTasks =
+      await generateStrategyWithGemini(routine);
+
+    if (!Array.isArray(generatedTasks) ||
+        generatedTasks.length === 0) {
+
+      throw new Error(
+        "Gemini returned no usable tasks."
+      );
+    }
+
+    /*
+      Only the parsed Gemini output reaches Supabase.
+    */
+
+    const insertedTasks =
+      await insertTasks(generatedTasks);
+
+    /*
+      Add the inserted rows directly to the current UI.
+      No need to re-send the routine anywhere.
+    */
+
+    tasks = [...tasks, ...insertedTasks];
+
+    renderTasks();
+
+    routineInput.value = "";
+
+    showToast(
+      `${insertedTasks.length} study missions added to today's plan.`
+    );
+
+  } catch (error) {
+
+    console.error("Generator error:", error);
+
+    showToast(
+      error.message || "Could not generate your strategy.",
+      true
+    );
+
+  } finally {
+
+    generateBtn.disabled = false;
+    generateBtn.classList.remove("loading");
+    generateBtn.textContent = "Generate Strategy";
+  }
+});
+
+
+async function generateStrategyWithGemini(routine) {
+
+  const systemInstruction =
+    "You are a strict CBSE Class 10 study planner. " +
+    "Distribute tasks across Maths, Science, SST, English, Hindi B, and AI 417 based on the user time. " +
+    "Return ONLY a valid JSON array of objects using keys subject and task_description. " +
+    "Do not use markdown.";
+
+  const requestBody = {
+
+    system_instruction: {
+      parts: [
+        {
+          text: systemInstruction
+        }
+      ]
+    },
+
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: routine
+          }
+        ]
+      }
+    ],
+
+    generationConfig: {
+      temperature: 0.35,
+      responseMimeType: "application/json"
+    }
+
+  };
+
+  const response = await fetch(
+    GEMINI_ENDPOINT,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify(requestBody)
+    }
+  );
+
+  if (!response.ok) {
+
+    const errorText = await response.text();
+
+    throw new Error(
+      `Gemini API error (${response.status}). ${errorText.slice(0, 250)}`
+    );
+  }
+
+  const result = await response.json();
+
+  const text =
+    result?.candidates?.[0]?.content?.parts
+      ?.map(part => part.text || "")
+      .join("")
+      .trim();
+
+  if (!text) {
+    throw new Error(
+      "Gemini returned an empty response."
+    );
+  }
+
+  /*
+    Gemini is instructed to return JSON.
+    The fallback cleanup handles accidental ```json wrappers.
+  */
+
+  let cleaned = text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  let parsed;
+
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error(
+      "Gemini returned invalid JSON. Please try again."
+    );
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      "Gemini response was not a JSON array."
+    );
+  }
+
+  /*
+    Strictly validate the generated data before insertion.
+    This also prevents unexpected fields from being stored.
+  */
+
+  const validTasks = parsed
+    .map(item => ({
+      subject:
+        typeof item?.subject === "string"
+          ? item.subject.trim()
+          : "",
+
+      task_description:
+        typeof item?.task_description === "string"
+          ? item.task_description.trim()
+          : ""
+    }))
+    .filter(item =>
+      item.subject &&
+      item.task_description
+    );
+
+  if (!validTasks.length) {
+    throw new Error(
+      "Gemini did not return valid study tasks."
+    );
+  }
+
+  return validTasks;
+}
+
+
+/* =========================================================
+   POMODORO TIMER
+   ========================================================= */
+
+function setTimerMode(mode) {
+
+  stopTimer();
+
+  currentTimerMode = mode;
+
+  if (mode === "study") {
+
+    timerSeconds = 25 * 60;
+
+    timerMode.textContent = "Study Mode";
+
+    studyModeBtn.classList.add("primary");
+    breakModeBtn.classList.remove("primary");
+
+  } else {
+
+    timerSeconds = 5 * 60;
+
+    timerMode.textContent = "Coffee Break";
+
+    breakModeBtn.classList.add("primary");
+    studyModeBtn.classList.remove("primary");
+  }
+
+  updateTimerDisplay();
+}
+
+
+function updateTimerDisplay() {
+
+  const minutes =
+    Math.floor(timerSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+
+  const seconds =
+    (timerSeconds % 60)
+      .toString()
+      .padStart(2, "0");
+
+  timerDisplay.textContent =
+    `${minutes}:${seconds}`;
+}
+
+
+function startTimer() {
+
+  if (timerRunning) {
+    stopTimer();
+    return;
+  }
+
+  timerRunning = true;
+  timerStartBtn.textContent = "Pause";
+
+  timerInterval = setInterval(() => {
+
+    if (timerSeconds > 0) {
+
+      timerSeconds--;
+      updateTimerDisplay();
+
+    } else {
+
+      stopTimer();
+
+      showToast(
+        currentTimerMode === "study"
+          ? "Study session complete. Take a 5-minute break."
+          : "Break complete. Time to get back to work."
+      );
+
+      if (currentTimerMode === "study") {
+        setTimerMode("break");
+      } else {
+        setTimerMode("study");
+      }
+
+    }
+
+  }, 1000);
+}
+
+
+function stopTimer() {
+
+  clearInterval(timerInterval);
+
+  timerInterval = null;
+  timerRunning = false;
+
+  timerStartBtn.textContent = "Start";
+}
+
+
+studyModeBtn.addEventListener(
+  "click",
+  () => setTimerMode("study")
+);
+
+breakModeBtn.addEventListener(
+  "click",
+  () => setTimerMode("break")
+);
+
+timerStartBtn.addEventListener(
+  "click",
+  startTimer
+);
+
+timerResetBtn.addEventListener(
+  "click",
+  () => setTimerMode(currentTimerMode)
+);
+
+
+/* =========================================================
+   INITIALIZATION
+   ========================================================= */
+
+formatDate();
+updateTimerDisplay();
+
+(async function initialize() {
+
+  try {
+
+    const {
+      data: {
+        session
+      }
+    } = await supabaseClient.auth.getSession();
+
+    if (session?.user) {
+      showApp(session.user);
+    }
+
+  } catch (error) {
+
+    console.error(
+      "Session initialization failed:",
+      error
+    );
+
+  }
+
+})();
+</script>
+
+</body>
+</html>
