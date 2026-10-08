@@ -2,29 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="theme-color" content="#07111f">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#07101d">
+<meta name="description" content="Pre-Board Mission Control — CBSE Class 10 Study Tracker">
+
 <title>Pre-Board Mission Control</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
-
 :root{
-  --bg:#050a12;
-  --bg2:#081321;
-  --card:rgba(11,23,39,.86);
-  --card2:#0d1a2c;
-  --border:rgba(157,181,208,.13);
-  --text:#edf5ff;
-  --muted:#8ea1b7;
-  --blue:#4f9bf7;
-  --cyan:#5ed7ff;
-  --green:#48df82;
-  --danger:#fb7185;
-  --shadow:0 25px 70px rgba(0,0,0,.4);
-  --radius:20px;
+  --bg:#050b14;
+  --bg2:#08111f;
+  --panel:rgba(13,24,40,.78);
+  --panel2:rgba(17,31,50,.88);
+  --border:rgba(148,163,184,.13);
+  --border2:rgba(96,165,250,.20);
+  --text:#edf4ff;
+  --muted:#8ea1b8;
+  --blue:#60a5fa;
+  --cyan:#67e8f9;
+  --green:#4ade80;
+  --orange:#fbbf24;
+  --red:#fb7185;
+  --shadow:0 25px 80px rgba(0,0,0,.38);
+  --radius:22px;
 }
 
 *{
@@ -39,28 +41,30 @@ html{
 
 body{
   min-height:100vh;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   color:var(--text);
-  font-family:"DM Sans",sans-serif;
   background:
-    radial-gradient(circle at 85% -10%,rgba(46,105,178,.2),transparent 34%),
-    radial-gradient(circle at -10% 90%,rgba(34,75,124,.14),transparent 30%),
-    linear-gradient(145deg,#030810,#07111e 55%,#040911);
+    radial-gradient(circle at 15% 10%,rgba(37,99,235,.13),transparent 30%),
+    radial-gradient(circle at 90% 20%,rgba(6,182,212,.08),transparent 28%),
+    linear-gradient(145deg,#030711,#07111e 50%,#040914);
+  overflow-x:hidden;
 }
 
-body:before{
+body::before{
   content:"";
   position:fixed;
   inset:0;
   pointer-events:none;
-  opacity:.14;
+  opacity:.28;
   background-image:
-    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
-  background-size:42px 42px;
-  mask-image:linear-gradient(to bottom,#000,transparent 92%);
+    linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+  background-size:40px 40px;
+  mask-image:linear-gradient(to bottom,black,transparent 85%);
 }
 
-button,input{
+button,
+input{
   font:inherit;
 }
 
@@ -78,372 +82,295 @@ button{
 
 #authScreen{
   min-height:100vh;
-  display:grid;
-  place-items:center;
-  padding:22px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  position:relative;
+}
+
+.auth-glow{
+  position:absolute;
+  width:420px;
+  height:420px;
+  border-radius:50%;
+  background:rgba(37,99,235,.10);
+  filter:blur(80px);
+  pointer-events:none;
 }
 
 .auth-card{
-  width:min(430px,100%);
+  width:min(460px,100%);
   padding:34px;
+  background:rgba(8,17,30,.82);
   border:1px solid var(--border);
-  border-radius:26px;
-  background:rgba(7,17,30,.9);
+  border-radius:28px;
   box-shadow:var(--shadow);
-  backdrop-filter:blur(22px);
-}
-
-.logo{
-  width:52px;
-  height:52px;
-  display:grid;
-  place-items:center;
-  margin-bottom:22px;
-  border-radius:16px;
-  color:#fff;
-  font:700 17px "Space Grotesk";
-  background:linear-gradient(135deg,#5da9ff,#2868bd);
-  box-shadow:0 12px 35px rgba(62,139,239,.25);
-}
-
-.auth-card h1{
-  font:700 28px "Space Grotesk";
-  letter-spacing:-.8px;
-}
-
-.auth-card>p{
-  margin-top:8px;
-  color:var(--muted);
-  font-size:14px;
-  line-height:1.6;
-}
-
-.auth-tabs{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:4px;
-  margin:27px 0 20px;
-  padding:4px;
-  border-radius:12px;
-  background:#06101c;
-}
-
-.auth-tabs button{
-  border:0;
-  border-radius:9px;
-  padding:11px;
-  color:var(--muted);
-  background:transparent;
-}
-
-.auth-tabs button.active{
-  color:#fff;
-  background:#152943;
-}
-
-.field{
-  margin-bottom:15px;
-}
-
-.field label{
-  display:block;
-  margin-bottom:7px;
-  color:#b8c7d7;
-  font-size:12px;
-  font-weight:600;
-}
-
-.field input{
-  width:100%;
-  padding:13px 14px;
-  border:1px solid var(--border);
-  border-radius:11px;
-  outline:none;
-  color:#fff;
-  background:#07111e;
-}
-
-.field input:focus{
-  border-color:rgba(94,167,255,.7);
-  box-shadow:0 0 0 3px rgba(94,167,255,.08);
-}
-
-.primary{
-  width:100%;
-  border:0;
-  border-radius:12px;
-  padding:14px;
-  color:#04101b;
-  background:linear-gradient(135deg,#61d5ff,#4c98f5);
-  font-weight:800;
-  transition:.2s;
-}
-
-.primary:hover{
-  transform:translateY(-1px);
-  filter:brightness(1.07);
-}
-
-.primary:disabled{
-  cursor:not-allowed;
-  opacity:.65;
-}
-
-.auth-message{
-  min-height:20px;
-  margin-top:13px;
-  color:var(--muted);
-  text-align:center;
-  font-size:13px;
-}
-
-/* =========================
-   HEADER
-========================= */
-
-header{
-  position:sticky;
-  top:0;
-  z-index:20;
-  border-bottom:1px solid var(--border);
-  background:rgba(4,10,18,.78);
-  backdrop-filter:blur(18px);
-}
-
-.header-inner{
-  width:min(1420px,calc(100% - 40px));
-  min-height:74px;
-  margin:auto;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:15px;
+  backdrop-filter:blur(24px);
+  position:relative;
+  z-index:1;
 }
 
 .brand{
   display:flex;
   align-items:center;
-  gap:12px;
+  gap:13px;
+  margin-bottom:30px;
 }
 
 .brand-icon{
-  width:38px;
-  height:38px;
+  width:48px;
+  height:48px;
+  border-radius:15px;
   display:grid;
   place-items:center;
-  border-radius:11px;
-  color:var(--cyan);
-  background:#102744;
-  font:700 14px "Space Grotesk";
+  background:linear-gradient(145deg,#1d4ed8,#0891b2);
+  box-shadow:0 12px 35px rgba(37,99,235,.25);
+  font-size:21px;
 }
 
 .brand h1{
-  font:600 18px "Space Grotesk";
+  font-size:18px;
+  letter-spacing:-.4px;
 }
 
-.brand span{
-  display:block;
-  margin-top:2px;
+.brand p{
   color:var(--muted);
-  font-size:11px;
-}
-
-.header-right{
-  display:flex;
-  align-items:center;
-  gap:9px;
-}
-
-.user{
-  max-width:220px;
-  overflow:hidden;
-  padding:8px 12px;
-  border:1px solid var(--border);
-  border-radius:50px;
-  color:#b7c8da;
-  background:#081321;
   font-size:12px;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  margin-top:3px;
 }
 
-.logout{
-  border:1px solid var(--border);
-  border-radius:10px;
-  padding:9px 13px;
-  color:#b8c9dc;
-  background:transparent;
-  font-size:12px;
+.auth-heading{
+  margin-bottom:22px;
 }
 
-/* =========================
-   LAYOUT
-========================= */
-
-.container{
-  width:min(1420px,calc(100% - 40px));
-  margin:auto;
-  padding:38px 0 70px;
+.auth-heading h2{
+  font-size:30px;
+  letter-spacing:-1.2px;
+  margin-bottom:7px;
 }
 
-.hero{
-  display:grid;
-  grid-template-columns:1.5fr .75fr;
-  gap:20px;
-  margin-bottom:20px;
-}
-
-.card{
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  background:var(--card);
-  box-shadow:var(--shadow);
-  backdrop-filter:blur(15px);
-}
-
-.generator-card{
-  min-height:285px;
-  padding:34px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  position:relative;
-  overflow:hidden;
-}
-
-.generator-card:after{
-  content:"";
-  position:absolute;
-  width:380px;
-  height:380px;
-  right:-150px;
-  top:-160px;
-  border:1px solid rgba(94,215,255,.08);
-  border-radius:50%;
-  box-shadow:
-    0 0 0 50px rgba(94,215,255,.018),
-    0 0 0 100px rgba(94,215,255,.01);
-  pointer-events:none;
-}
-
-.eyebrow{
-  color:var(--cyan);
-  font-size:11px;
-  font-weight:700;
-  letter-spacing:2px;
-  text-transform:uppercase;
-}
-
-.generator-card h2{
-  max-width:760px;
-  margin-top:10px;
-  font:700 clamp(31px,4vw,54px) "Space Grotesk";
-  line-height:1.03;
-  letter-spacing:-2px;
-}
-
-.generator-card p{
-  max-width:700px;
-  margin-top:14px;
+.auth-heading p{
   color:var(--muted);
-  line-height:1.65;
+  line-height:1.6;
   font-size:14px;
 }
 
-.generator-form{
-  position:relative;
-  z-index:2;
-  display:flex;
-  gap:10px;
-  margin-top:25px;
-}
-
-.generator-form input{
-  min-width:0;
-  flex:1;
-  padding:14px 16px;
+.auth-tabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  padding:4px;
+  background:#07101c;
   border:1px solid var(--border);
-  border-radius:12px;
-  outline:none;
-  color:#fff;
-  background:rgba(2,8,16,.75);
+  border-radius:13px;
+  margin-bottom:22px;
 }
 
-.generator-form input:focus{
-  border-color:rgba(94,215,255,.45);
-}
-
-.generate{
-  flex-shrink:0;
+.auth-tab{
   border:0;
-  border-radius:12px;
-  padding:0 19px;
-  color:#04111a;
-  background:var(--cyan);
-  font-weight:800;
+  background:transparent;
+  color:var(--muted);
+  padding:10px;
+  border-radius:9px;
 }
 
-.generate:disabled{
+.auth-tab.active{
+  color:white;
+  background:#16263b;
+}
+
+.form-group{
+  margin-bottom:15px;
+}
+
+.form-group label{
+  display:block;
+  color:#b6c4d6;
+  font-size:12px;
+  margin-bottom:7px;
+}
+
+.input{
+  width:100%;
+  padding:13px 14px;
+  color:white;
+  background:#07101c;
+  border:1px solid var(--border);
+  outline:none;
+  border-radius:12px;
+  transition:.2s;
+}
+
+.input:focus{
+  border-color:rgba(96,165,250,.55);
+  box-shadow:0 0 0 3px rgba(96,165,250,.08);
+}
+
+.primary-btn{
+  width:100%;
+  border:0;
+  color:white;
+  font-weight:700;
+  padding:14px 16px;
+  border-radius:13px;
+  background:linear-gradient(135deg,#2563eb,#0891b2);
+  box-shadow:0 12px 30px rgba(37,99,235,.18);
+  transition:.2s;
+}
+
+.primary-btn:hover{
+  transform:translateY(-1px);
+  filter:brightness(1.08);
+}
+
+.primary-btn:disabled{
+  opacity:.55;
   cursor:not-allowed;
-  opacity:.65;
+  transform:none;
+}
+
+.auth-message{
+  min-height:20px;
+  margin-top:14px;
+  font-size:13px;
+  line-height:1.5;
+}
+
+.error{
+  color:#fda4af;
+}
+
+.success{
+  color:#86efac;
 }
 
 /* =========================
-   TIMER
+   APP
 ========================= */
 
-.timer{
-  padding:27px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
+#app{
+  min-height:100vh;
 }
 
-.timer-head{
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:50;
+  height:72px;
   display:flex;
   align-items:center;
   justify-content:space-between;
+  padding:0 28px;
+  background:rgba(4,10,18,.72);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(22px);
 }
 
-.timer-head h3{
-  font:600 17px "Space Grotesk";
+.top-brand{
+  display:flex;
+  align-items:center;
+  gap:11px;
 }
 
-.mode{
-  color:var(--cyan);
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:1px;
-  text-transform:uppercase;
-}
-
-.clock{
-  margin:20px 0;
-  text-align:center;
-  font:700 clamp(48px,6vw,72px) "Space Grotesk";
-  letter-spacing:-4px;
-}
-
-.timer-buttons{
+.top-brand-icon{
+  width:37px;
+  height:37px;
+  border-radius:11px;
   display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
+  place-items:center;
+  background:linear-gradient(145deg,#1d4ed8,#0891b2);
 }
 
-.timer-buttons button{
+.top-brand strong{
+  font-size:14px;
+}
+
+.top-brand span{
+  display:block;
+  color:var(--muted);
+  font-size:10px;
+  margin-top:2px;
+}
+
+.logout-btn{
   border:1px solid var(--border);
+  color:#cbd5e1;
+  background:rgba(15,23,42,.7);
+  padding:9px 13px;
   border-radius:10px;
-  padding:11px;
-  color:#d9e6f3;
-  background:#091625;
   font-size:12px;
-  font-weight:600;
 }
 
-.timer-buttons button.selected{
-  border-color:transparent;
-  color:#04111a;
-  background:var(--cyan);
+.logout-btn:hover{
+  border-color:rgba(251,113,133,.35);
+  color:#fda4af;
+}
+
+.container{
+  width:min(1280px,calc(100% - 36px));
+  margin:0 auto;
+  padding:34px 0 60px;
+}
+
+.hero{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:30px;
+  margin-bottom:26px;
+}
+
+.hero-kicker{
+  color:var(--cyan);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  margin-bottom:10px;
+}
+
+.hero h2{
+  font-size:clamp(30px,5vw,52px);
+  letter-spacing:-2.4px;
+  line-height:1;
+  max-width:700px;
+}
+
+.hero h2 span{
+  background:linear-gradient(90deg,#fff,#8cc8ff,#67e8f9);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+
+.hero-sub{
+  color:var(--muted);
+  margin-top:13px;
+  max-width:650px;
+  line-height:1.7;
+  font-size:14px;
+}
+
+.date-pill{
+  flex-shrink:0;
+  border:1px solid var(--border);
+  background:var(--panel);
+  border-radius:15px;
+  padding:13px 17px;
+  text-align:right;
+}
+
+.date-pill small{
+  color:var(--muted);
+  display:block;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:1px;
+}
+
+.date-pill strong{
+  display:block;
+  margin-top:3px;
+  font-size:13px;
 }
 
 /* =========================
@@ -452,42 +379,172 @@ header{
 
 .stats{
   display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:13px;
-  margin-bottom:20px;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;
+  margin-bottom:18px;
 }
 
 .stat{
-  padding:20px 22px;
+  padding:18px;
+  border-radius:18px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  box-shadow:0 12px 40px rgba(0,0,0,.15);
 }
 
-.label{
-  color:#8296ad;
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:1.3px;
+.stat-label{
+  color:var(--muted);
+  font-size:11px;
   text-transform:uppercase;
+  letter-spacing:1px;
 }
 
-.value{
-  margin-top:8px;
-  font:700 28px "Space Grotesk";
+.stat-value{
+  font-size:28px;
+  font-weight:800;
+  margin-top:6px;
+  letter-spacing:-1px;
+}
+
+.stat-detail{
+  color:#73879f;
+  font-size:11px;
+  margin-top:4px;
+}
+
+/* =========================
+   GRID
+========================= */
+
+.dashboard-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 340px;
+  gap:18px;
+}
+
+.card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:0 18px 60px rgba(0,0,0,.20);
+  backdrop-filter:blur(18px);
+}
+
+.card-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:15px;
+  padding:21px 22px;
+  border-bottom:1px solid var(--border);
+}
+
+.card-title{
+  font-size:15px;
+  font-weight:750;
+}
+
+.card-subtitle{
+  color:var(--muted);
+  font-size:11px;
+  margin-top:4px;
+}
+
+.card-body{
+  padding:22px;
+}
+
+/* =========================
+   STRATEGY
+========================= */
+
+.strategy-box{
+  display:flex;
+  gap:10px;
+  margin-bottom:16px;
+}
+
+.strategy-input{
+  flex:1;
+  min-width:0;
+  padding:14px 15px;
+  border-radius:13px;
+  color:white;
+  background:#07101c;
+  border:1px solid var(--border);
+  outline:none;
+}
+
+.strategy-input:focus{
+  border-color:rgba(96,165,250,.5);
+}
+
+.generate-btn{
+  border:0;
+  padding:0 18px;
+  border-radius:13px;
+  color:white;
+  font-weight:700;
+  background:linear-gradient(135deg,#2563eb,#0891b2);
+  min-width:155px;
+}
+
+.generate-btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+.ai-note{
+  display:flex;
+  gap:9px;
+  padding:11px 13px;
+  border-radius:12px;
+  color:#8ea1b8;
+  background:rgba(37,99,235,.055);
+  border:1px solid rgba(96,165,250,.08);
+  font-size:11px;
+  line-height:1.5;
+  margin-bottom:20px;
+}
+
+/* =========================
+   PROGRESS
+========================= */
+
+.progress-wrap{
+  margin-bottom:19px;
+}
+
+.progress-top{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:8px;
+  font-size:12px;
+}
+
+.progress-top span:first-child{
+  color:#b9c7d8;
+}
+
+.progress-top span:last-child{
+  color:var(--cyan);
+  font-weight:700;
 }
 
 .progress-track{
-  height:7px;
+  height:9px;
+  border-radius:99px;
+  background:#07101c;
   overflow:hidden;
-  margin-top:13px;
-  border-radius:50px;
-  background:#07111e;
+  border:1px solid rgba(255,255,255,.04);
 }
 
-.progress-bar{
-  width:0%;
+.progress-fill{
   height:100%;
+  width:0;
   border-radius:inherit;
-  background:linear-gradient(90deg,#4d96f2,#61d5ff);
-  transition:width .4s ease;
+  background:linear-gradient(90deg,#2563eb,#22d3ee);
+  transition:width .5s ease;
 }
 
 /* =========================
@@ -495,240 +552,381 @@ header{
 ========================= */
 
 .tasks{
-  overflow:hidden;
-}
-
-.tasks-head{
-  padding:23px 25px;
-  border-bottom:1px solid var(--border);
   display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:15px;
-}
-
-.tasks-head h3{
-  font:600 18px "Space Grotesk";
-}
-
-.tasks-head p{
-  margin-top:4px;
-  color:var(--muted);
-  font-size:12px;
-}
-
-.date{
-  padding:8px 11px;
-  border:1px solid var(--border);
-  border-radius:9px;
-  color:#aebfd1;
-  background:#081321;
-  font-size:11px;
-}
-
-.table-wrap{
-  overflow-x:auto;
-}
-
-table{
-  width:100%;
-  border-collapse:collapse;
-}
-
-th{
-  padding:13px 20px;
-  color:#71859d;
-  background:rgba(3,9,16,.3);
-  font-size:10px;
-  letter-spacing:1px;
-  text-align:left;
-  text-transform:uppercase;
-}
-
-td{
-  padding:16px 20px;
-  border-top:1px solid rgba(148,163,184,.07);
-  font-size:13px;
-}
-
-tbody tr{
-  transition:.2s;
-}
-
-tbody tr:hover{
-  background:rgba(94,167,255,.035);
-}
-
-.subject{
-  width:160px;
-  color:var(--cyan);
-  font-weight:700;
+  flex-direction:column;
+  gap:9px;
 }
 
 .task{
-  color:#dbe7f3;
-  line-height:1.5;
+  display:grid;
+  grid-template-columns:28px 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:14px;
+  border:1px solid var(--border);
+  background:rgba(6,14,25,.72);
+  border-radius:15px;
+  transition:.2s;
 }
 
-.completed .task{
-  color:#617389;
+.task:hover{
+  border-color:var(--border2);
+  transform:translateY(-1px);
+}
+
+.task.completed{
+  opacity:.62;
+}
+
+.task.completed .task-description{
   text-decoration:line-through;
-}
-
-.check-cell{
-  width:65px;
-  text-align:center;
+  color:#708198;
 }
 
 .check{
-  width:20px;
-  height:20px;
-  appearance:none;
-  position:relative;
-  border:1px solid #46627e;
-  border-radius:6px;
-  background:#081321;
+  width:24px;
+  height:24px;
+  border-radius:8px;
+  border:1px solid #34465d;
+  background:#091321;
+  display:grid;
+  place-items:center;
+  color:white;
+  font-size:13px;
   cursor:pointer;
-  vertical-align:middle;
 }
 
-.check:checked{
-  border-color:var(--green);
-  background:var(--green);
+.task.completed .check{
+  background:#166534;
+  border-color:#22c55e;
 }
 
-.check:checked:after{
-  content:"";
-  position:absolute;
-  width:5px;
-  height:9px;
-  left:6px;
-  top:3px;
-  border-right:2px solid #05200e;
-  border-bottom:2px solid #05200e;
-  transform:rotate(45deg);
+.task-subject{
+  font-size:10px;
+  color:var(--cyan);
+  text-transform:uppercase;
+  letter-spacing:1px;
+  font-weight:800;
+  margin-bottom:4px;
+}
+
+.task-description{
+  color:#d6e1ee;
+  font-size:13px;
+  line-height:1.5;
+}
+
+.task-number{
+  color:#52657c;
+  font-size:10px;
 }
 
 .empty{
-  padding:65px 20px;
-  color:var(--muted);
+  padding:35px 20px;
   text-align:center;
-}
-
-.empty strong{
-  display:block;
-  margin-bottom:6px;
-  color:#cbd8e6;
-}
-
-/* =========================
-   TOAST
-========================= */
-
-.toast{
-  position:fixed;
-  right:20px;
-  bottom:20px;
-  z-index:100;
-  max-width:380px;
-  padding:13px 16px;
-  border:1px solid var(--border);
-  border-radius:12px;
-  color:#dce9f7;
-  background:#0b1829;
-  box-shadow:var(--shadow);
-  opacity:0;
-  transform:translateY(25px);
-  pointer-events:none;
-  transition:.3s;
+  color:var(--muted);
+  border:1px dashed rgba(148,163,184,.14);
+  border-radius:16px;
+  line-height:1.7;
   font-size:13px;
 }
 
-.toast.show{
-  opacity:1;
-  transform:translateY(0);
+/* =========================
+   POMODORO
+========================= */
+
+.pomo-card{
+  overflow:hidden;
 }
 
-.toast.error{
-  color:#fecdd3;
-  border-color:rgba(251,113,133,.25);
+.pomo-display{
+  text-align:center;
+  padding:28px 20px 18px;
+}
+
+.pomo-mode{
+  color:var(--cyan);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:2px;
+  text-transform:uppercase;
+}
+
+.timer{
+  font-variant-numeric:tabular-nums;
+  font-size:64px;
+  font-weight:800;
+  letter-spacing:-3px;
+  margin:7px 0;
+}
+
+.timer-note{
+  color:var(--muted);
+  font-size:11px;
+}
+
+.pomo-ring{
+  width:190px;
+  height:190px;
+  margin:0 auto 15px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  position:relative;
+  background:
+    radial-gradient(circle at center,#081321 57%,transparent 58%),
+    conic-gradient(#22d3ee var(--progress),#142335 0);
+}
+
+.pomo-ring::before{
+  content:"";
+  position:absolute;
+  inset:7px;
+  border-radius:50%;
+  border:1px solid rgba(103,232,249,.10);
+}
+
+.pomo-controls{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+  padding:0 20px 20px;
+}
+
+.pomo-btn{
+  padding:11px;
+  border-radius:11px;
+  border:1px solid var(--border);
+  color:#d8e5f3;
+  background:#091321;
+}
+
+.pomo-btn.primary{
+  color:white;
+  border-color:rgba(96,165,250,.25);
+  background:rgba(37,99,235,.16);
+}
+
+.mode-buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  padding:0 20px 20px;
+}
+
+.mode-btn{
+  border:1px solid var(--border);
+  color:var(--muted);
+  background:transparent;
+  border-radius:10px;
+  padding:8px;
+  font-size:11px;
+}
+
+.mode-btn.active{
+  color:white;
+  background:#15253a;
+  border-color:rgba(96,165,250,.2);
+}
+
+/* =========================
+   QUICK INFO
+========================= */
+
+.quick-card{
+  margin-top:18px;
+}
+
+.subject-list{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.subject{
+  padding:11px;
+  border-radius:11px;
+  background:#07101c;
+  border:1px solid var(--border);
+  font-size:11px;
+  color:#b8c6d7;
+}
+
+.subject strong{
+  display:block;
+  color:#e5eef9;
+  font-size:12px;
+  margin-bottom:2px;
+}
+
+/* =========================
+   LOADING
+========================= */
+
+#loadingOverlay{
+  position:fixed;
+  inset:0;
+  z-index:100;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(2,7,13,.68);
+  backdrop-filter:blur(8px);
+}
+
+.loading-box{
+  width:min(330px,calc(100% - 40px));
+  padding:28px;
+  border-radius:20px;
+  border:1px solid var(--border);
+  background:#091321;
+  text-align:center;
+  box-shadow:var(--shadow);
 }
 
 .spinner{
-  display:inline-block;
-  width:13px;
-  height:13px;
-  margin-right:7px;
-  border:2px solid rgba(0,0,0,.25);
-  border-top-color:#03101a;
+  width:35px;
+  height:35px;
   border-radius:50%;
-  animation:spin .7s linear infinite;
-  vertical-align:-2px;
+  border:3px solid #1d334d;
+  border-top-color:#67e8f9;
+  animation:spin .8s linear infinite;
+  margin:0 auto 16px;
 }
 
 @keyframes spin{
   to{transform:rotate(360deg)}
 }
 
+.loading-box strong{
+  display:block;
+  font-size:14px;
+}
+
+.loading-box p{
+  color:var(--muted);
+  font-size:11px;
+  margin-top:6px;
+}
+
 /* =========================
-   MOBILE
+   TOAST
 ========================= */
 
-@media(max-width:900px){
-  .hero{
+#toast{
+  position:fixed;
+  right:20px;
+  bottom:20px;
+  z-index:120;
+  max-width:350px;
+  padding:13px 16px;
+  border-radius:13px;
+  background:#0d1a2b;
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
+  color:#dce8f5;
+  font-size:12px;
+  transform:translateY(20px);
+  opacity:0;
+  pointer-events:none;
+  transition:.25s;
+}
+
+#toast.show{
+  transform:translateY(0);
+  opacity:1;
+}
+
+#toast.bad{
+  border-color:rgba(251,113,133,.28);
+  color:#fecdd3;
+}
+
+#toast.good{
+  border-color:rgba(74,222,128,.25);
+  color:#bbf7d0;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media(max-width:950px){
+  .dashboard-grid{
     grid-template-columns:1fr;
+  }
+
+  .stats{
+    grid-template-columns:repeat(2,1fr);
+  }
+
+  .pomo-ring{
+    width:170px;
+    height:170px;
   }
 }
 
 @media(max-width:650px){
+  .topbar{
+    padding:0 16px;
+  }
 
-  .header-inner,
   .container{
-    width:calc(100% - 24px);
+    width:min(100% - 24px,1280px);
+    padding-top:25px;
   }
 
-  .brand span,
-  .user{
-    display:none;
+  .hero{
+    display:block;
   }
 
-  .generator-card,
-  .timer{
-    padding:23px;
+  .date-pill{
+    display:inline-block;
+    margin-top:18px;
+    text-align:left;
   }
 
-  .generator-card h2{
-    font-size:35px;
-    letter-spacing:-1.5px;
+  .hero h2{
+    font-size:36px;
   }
 
-  .generator-form{
+  .stats{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .strategy-box{
     flex-direction:column;
   }
 
-  .generate{
-    min-height:48px;
+  .generate-btn{
+    height:46px;
   }
 
+  .card-header,
+  .card-body{
+    padding:17px;
+  }
+
+  .task{
+    grid-template-columns:27px 1fr;
+  }
+
+  .task-number{
+    display:none;
+  }
+
+  .auth-card{
+    padding:25px;
+  }
+}
+
+@media(max-width:400px){
   .stats{
     grid-template-columns:1fr;
   }
 
-  .tasks-head{
-    align-items:flex-start;
-    flex-direction:column;
-  }
-
-  th,td{
-    padding:14px 15px;
-  }
-
-  .subject{
-    width:110px;
-  }
-
-  .auth-card{
-    padding:26px;
+  .timer{
+    font-size:54px;
   }
 }
 </style>
@@ -736,38 +934,42 @@ tbody tr:hover{
 
 <body>
 
-<!-- =====================================================
+<!-- =========================
      AUTH SCREEN
-===================================================== -->
+========================= -->
 
 <section id="authScreen">
 
+  <div class="auth-glow"></div>
+
   <div class="auth-card">
 
-    <div class="logo">10</div>
+    <div class="brand">
+      <div class="brand-icon">⌁</div>
+      <div>
+        <h1>Pre-Board Mission Control</h1>
+        <p>CBSE CLASS 10 • STUDY COMMAND CENTRE</p>
+      </div>
+    </div>
 
-    <h1>Pre-Board Mission Control</h1>
-
-    <p>
-      Your personal Class 10 command center for planning,
-      studying and tracking your preparation.
-    </p>
+    <div class="auth-heading">
+      <h2 id="authTitle">Welcome back.</h2>
+      <p id="authSubtitle">
+        Sign in to continue your daily study mission.
+      </p>
+    </div>
 
     <div class="auth-tabs">
-      <button id="loginTab" class="active" type="button">
-        Login
-      </button>
-
-      <button id="signupTab" type="button">
-        Create Account
-      </button>
+      <button class="auth-tab active" id="loginTab">Login</button>
+      <button class="auth-tab" id="signupTab">Create account</button>
     </div>
 
     <form id="authForm">
 
-      <div class="field">
-        <label>Email</label>
+      <div class="form-group">
+        <label for="email">Email address</label>
         <input
+          class="input"
           id="email"
           type="email"
           autocomplete="email"
@@ -776,276 +978,442 @@ tbody tr:hover{
         >
       </div>
 
-      <div class="field">
-        <label>Password</label>
+      <div class="form-group">
+        <label for="password">Password</label>
         <input
+          class="input"
           id="password"
           type="password"
           autocomplete="current-password"
-          minlength="6"
           placeholder="Minimum 6 characters"
+          minlength="6"
           required
         >
       </div>
 
-      <button id="authButton" class="primary" type="submit">
-        Login
+      <button class="primary-btn" id="authButton" type="submit">
+        Enter Mission Control
       </button>
+
+      <div class="auth-message" id="authMessage"></div>
 
     </form>
 
-    <div id="authMessage" class="auth-message"></div>
-
   </div>
+</section>
+
+
+<!-- =========================
+     APPLICATION
+========================= -->
+
+<section id="app" class="hidden">
+
+  <header class="topbar">
+
+    <div class="top-brand">
+      <div class="top-brand-icon">⌁</div>
+      <div>
+        <strong>MISSION CONTROL</strong>
+        <span>CLASS 10 PRE-BOARD</span>
+      </div>
+    </div>
+
+    <button class="logout-btn" id="logoutBtn">
+      Logout
+    </button>
+
+  </header>
+
+
+  <main class="container">
+
+    <!-- HERO -->
+
+    <section class="hero">
+
+      <div>
+        <div class="hero-kicker">Daily command centre</div>
+
+        <h2>
+          Build your
+          <span>study advantage.</span>
+        </h2>
+
+        <p class="hero-sub">
+          Tell the planner what you need to accomplish today.
+          Gemini will convert your routine into focused,
+          trackable CBSE Class 10 tasks.
+        </p>
+      </div>
+
+      <div class="date-pill">
+        <small>Mission date</small>
+        <strong id="todayDate">—</strong>
+      </div>
+
+    </section>
+
+
+    <!-- STATS -->
+
+    <section class="stats">
+
+      <div class="stat">
+        <div class="stat-label">Today's Tasks</div>
+        <div class="stat-value" id="totalTasks">0</div>
+        <div class="stat-detail">AI-generated missions</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Completed</div>
+        <div class="stat-value" id="completedTasks">0</div>
+        <div class="stat-detail">Tasks finished</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Progress</div>
+        <div class="stat-value" id="progressPercent">0%</div>
+        <div class="stat-detail">Today's completion</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Focus</div>
+        <div class="stat-value" id="focusCount">0</div>
+        <div class="stat-detail">Pomodoro sessions</div>
+      </div>
+
+    </section>
+
+
+    <!-- MAIN GRID -->
+
+    <section class="dashboard-grid">
+
+      <!-- LEFT -->
+
+      <div>
+
+        <div class="card">
+
+          <div class="card-header">
+            <div>
+              <div class="card-title">AI Study Strategy</div>
+              <div class="card-subtitle">
+                Generate today's mission from your available time.
+              </div>
+            </div>
+          </div>
+
+          <div class="card-body">
+
+            <div class="strategy-box">
+
+              <input
+                id="routineInput"
+                class="strategy-input"
+                type="text"
+                maxlength="1000"
+                placeholder="e.g. I have 4 hours after school. I need to revise Science and Maths..."
+              >
+
+              <button
+                class="generate-btn"
+                id="generateBtn"
+              >
+                Generate Strategy
+              </button>
+
+            </div>
+
+            <div class="ai-note">
+              <span>✦</span>
+              <span>
+                Your routine is sent to Gemini only for planning.
+                The raw routine is never stored in Supabase.
+              </span>
+            </div>
+
+            <div class="progress-wrap">
+
+              <div class="progress-top">
+                <span>Mission progress</span>
+                <span id="progressText">0 / 0</span>
+              </div>
+
+              <div class="progress-track">
+                <div
+                  class="progress-fill"
+                  id="progressFill"
+                ></div>
+              </div>
+
+            </div>
+
+            <div class="tasks" id="tasksContainer">
+
+              <div class="empty">
+                No missions generated yet.<br>
+                Enter your available study time above.
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+
+        <!-- SUBJECTS -->
+
+        <div class="card quick-card">
+
+          <div class="card-header">
+            <div>
+              <div class="card-title">Mission Subjects</div>
+              <div class="card-subtitle">
+                Your planner covers the complete subject set.
+              </div>
+            </div>
+          </div>
+
+          <div class="card-body">
+
+            <div class="subject-list">
+
+              <div class="subject">
+                <strong>Mathematics</strong>
+                Core concepts + practice
+              </div>
+
+              <div class="subject">
+                <strong>Science</strong>
+                Physics + Chemistry + Biology
+              </div>
+
+              <div class="subject">
+                <strong>Social Science</strong>
+                History + Geography + Civics + Economics
+              </div>
+
+              <div class="subject">
+                <strong>English</strong>
+                Literature + Language
+              </div>
+
+              <div class="subject">
+                <strong>Hindi B</strong>
+                साहित्य + व्याकरण
+              </div>
+
+              <div class="subject">
+                <strong>AI 417</strong>
+                Artificial Intelligence
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- RIGHT -->
+
+      <aside>
+
+        <div class="card pomo-card">
+
+          <div class="card-header">
+            <div>
+              <div class="card-title">Focus Engine</div>
+              <div class="card-subtitle">
+                Pomodoro productivity timer
+              </div>
+            </div>
+          </div>
+
+          <div class="pomo-display">
+
+            <div class="pomo-ring" id="pomoRing">
+
+              <div>
+
+                <div class="pomo-mode" id="pomoMode">
+                  Study
+                </div>
+
+                <div class="timer" id="timer">
+                  25:00
+                </div>
+
+                <div class="timer-note">
+                  Focus without distraction
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div class="mode-buttons">
+
+            <button
+              class="mode-btn active"
+              id="studyModeBtn"
+            >
+              Study · 25m
+            </button>
+
+            <button
+              class="mode-btn"
+              id="breakModeBtn"
+            >
+              Break · 5m
+            </button>
+
+          </div>
+
+          <div class="pomo-controls">
+
+            <button
+              class="pomo-btn primary"
+              id="startPauseBtn"
+            >
+              Start
+            </button>
+
+            <button
+              class="pomo-btn"
+              id="resetTimerBtn"
+            >
+              Reset
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <div class="card quick-card">
+
+          <div class="card-header">
+            <div>
+              <div class="card-title">Focus Protocol</div>
+              <div class="card-subtitle">
+                Simple rules for today's mission
+              </div>
+            </div>
+          </div>
+
+          <div class="card-body">
+
+            <div style="display:flex;flex-direction:column;gap:13px;font-size:12px;color:#9cafc4;line-height:1.55">
+
+              <div>
+                <strong style="color:#e5eef9">01 · Single task</strong><br>
+                Finish the current mission before switching.
+              </div>
+
+              <div>
+                <strong style="color:#e5eef9">02 · 25 minutes</strong><br>
+                Use the Study timer for uninterrupted focus.
+              </div>
+
+              <div>
+                <strong style="color:#e5eef9">03 · 5 minutes</strong><br>
+                Take a real Coffee Break after each session.
+              </div>
+
+              <div>
+                <strong style="color:#e5eef9">04 · Track everything</strong><br>
+                Tick completed missions immediately.
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </aside>
+
+    </section>
+
+  </main>
 
 </section>
 
 
-<!-- =====================================================
-     APPLICATION
-===================================================== -->
+<!-- LOADING -->
 
-<div id="app" class="hidden">
+<div id="loadingOverlay">
 
-<header>
+  <div class="loading-box">
 
-  <div class="header-inner">
+    <div class="spinner"></div>
 
-    <div class="brand">
+    <strong id="loadingTitle">
+      Building your strategy
+    </strong>
 
-      <div class="brand-icon">10</div>
-
-      <div>
-        <h1>Pre-Board Mission Control</h1>
-        <span>Class 10 • Study Operations</span>
-      </div>
-
-    </div>
-
-    <div class="header-right">
-
-      <div id="userEmail" class="user"></div>
-
-      <button id="logoutButton" class="logout">
-        Logout
-      </button>
-
-    </div>
+    <p id="loadingText">
+      Gemini is turning your routine into focused missions.
+    </p>
 
   </div>
-
-</header>
-
-
-<main class="container">
-
-  <!-- HERO -->
-
-  <section class="hero">
-
-    <div class="card generator-card">
-
-      <div>
-
-        <div class="eyebrow">
-          Daily Strategy Engine
-        </div>
-
-        <h2>
-          Turn your available time into a mission.
-        </h2>
-
-        <p>
-          Tell the planner what you need to study and how much
-          time you have. Gemini will create a focused CBSE
-          Class 10 study strategy.
-        </p>
-
-      </div>
-
-      <form id="generatorForm" class="generator-form">
-
-        <input
-          id="routine"
-          type="text"
-          maxlength="1000"
-          placeholder="Example: I have 4 hours tonight and need to prepare for Maths and Science..."
-          required
-        >
-
-        <button id="generateButton" class="generate" type="submit">
-          Generate Strategy
-        </button>
-
-      </form>
-
-    </div>
-
-
-    <!-- TIMER -->
-
-    <aside class="card timer">
-
-      <div class="timer-head">
-
-        <h3>Focus Timer</h3>
-
-        <span id="timerMode" class="mode">
-          Study
-        </span>
-
-      </div>
-
-      <div id="timerDisplay" class="clock">
-        25:00
-      </div>
-
-      <div class="timer-buttons">
-
-        <button id="studyButton" class="selected">
-          25m Study
-        </button>
-
-        <button id="breakButton">
-          5m Break
-        </button>
-
-        <button id="startButton">
-          Start
-        </button>
-
-        <button id="resetButton">
-          Reset
-        </button>
-
-      </div>
-
-    </aside>
-
-  </section>
-
-
-  <!-- STATS -->
-
-  <section class="stats">
-
-    <div class="card stat">
-      <div class="label">Today's Tasks</div>
-      <div id="totalTasks" class="value">0</div>
-    </div>
-
-    <div class="card stat">
-      <div class="label">Completed</div>
-      <div id="completedTasks" class="value">0</div>
-    </div>
-
-    <div class="card stat">
-
-      <div class="label">Mission Progress</div>
-
-      <div id="progressText" class="value">
-        0%
-      </div>
-
-      <div class="progress-track">
-        <div id="progressBar" class="progress-bar"></div>
-      </div>
-
-    </div>
-
-  </section>
-
-
-  <!-- TASKS -->
-
-  <section class="card tasks">
-
-    <div class="tasks-head">
-
-      <div>
-        <h3>Today's Mission</h3>
-        <p>Your generated Class 10 study checklist.</p>
-      </div>
-
-      <div id="date" class="date"></div>
-
-    </div>
-
-    <div class="table-wrap">
-
-      <table>
-
-        <thead>
-          <tr>
-            <th>Done</th>
-            <th>Subject</th>
-            <th>Task</th>
-          </tr>
-        </thead>
-
-        <tbody id="taskBody"></tbody>
-
-      </table>
-
-      <div id="emptyState" class="empty">
-
-        <strong>No missions scheduled.</strong>
-
-        Enter your daily routine above and generate your strategy.
-
-      </div>
-
-    </div>
-
-  </section>
-
-</main>
 
 </div>
 
 
-<div id="toast" class="toast"></div>
+<!-- TOAST -->
+
+<div id="toast"></div>
 
 
 <script>
 /* =========================================================
-   CONFIG
+   CONFIGURATION
 ========================================================= */
 
 const SUPABASE_URL =
   "https://hceffrbjvozqkltrgxou.supabase.co";
 
 const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmxlIiwicmVmIjoiaGNlZmZyYmp2dm96cWtsdHJneG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MjE1ODYsImV4cCI6MjEwNjk5NzU4Nn0.lBh9Gxf9HnfUUJa0LFgzCahHEBVPIgPFRYljz0vRMS4";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmxlIiwicmVmIjoiaGNlZmZyYmp2b3pxa2x0cmd4b3UiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc5MTQyMTU4NiwgImV4cCI6MjEwNjk5NzU4Nn0.lBh9GxfHnfUUJa0LFgzCahHEBVPIgPFRYljz0vRMS4";
+
+/*
+  Gemini key supplied by you.
+  For a public production website, move this request
+  to a server/Edge Function instead of exposing the key.
+*/
+const GEMINI_API_KEY =
+  "AQ.Ab8RN6KkCMB9S_OM_D18pF3XrfGLiFNVryMLDsEpa90j0XtHfA";
+
+/*
+  Gemini model.
+  The REST generateContent API supports model-specific
+  endpoints and structured JSON responses.
+*/
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6L0qv8ZjuZ5jII1M0U66K_lu_5xWCsMdyTHrMb8gGuvcQ";
-
-const SYSTEM_INSTRUCTION =
-  'You are a strict CBSE Class 10 study planner. ' +
-  'Distribute tasks across Maths, Science, SST, English, Hindi B, and AI 417 based on the user time. ' +
-  'Return ONLY a valid JSON array of objects using keys "subject" and "task_description". Do not use markdown.';
-
-
-const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 
 /* =========================================================
-   STATE
+   SUPABASE
 ========================================================= */
 
-let currentUser = null;
-let tasks = [];
+const { createClient } = window.supabase;
 
-let authMode = "login";
-
-let timerModeState = "study";
-let timerSeconds = 25 * 60;
-let timerInterval = null;
-let timerRunning = false;
+const supabaseClient =
+  createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
 
 
 /* =========================================================
@@ -1057,12 +1425,6 @@ const authScreen =
 
 const app =
   document.getElementById("app");
-
-const loginTab =
-  document.getElementById("loginTab");
-
-const signupTab =
-  document.getElementById("signupTab");
 
 const authForm =
   document.getElementById("authForm");
@@ -1079,73 +1441,96 @@ const authButton =
 const authMessage =
   document.getElementById("authMessage");
 
-const userEmail =
-  document.getElementById("userEmail");
+const loginTab =
+  document.getElementById("loginTab");
 
-const logoutButton =
-  document.getElementById("logoutButton");
+const signupTab =
+  document.getElementById("signupTab");
 
-const generatorForm =
-  document.getElementById("generatorForm");
+const authTitle =
+  document.getElementById("authTitle");
+
+const authSubtitle =
+  document.getElementById("authSubtitle");
+
+const logoutBtn =
+  document.getElementById("logoutBtn");
 
 const routineInput =
-  document.getElementById("routine");
+  document.getElementById("routineInput");
 
-const generateButton =
-  document.getElementById("generateButton");
+const generateBtn =
+  document.getElementById("generateBtn");
 
-const taskBody =
-  document.getElementById("taskBody");
+const tasksContainer =
+  document.getElementById("tasksContainer");
 
-const emptyState =
-  document.getElementById("emptyState");
-
-const totalTasks =
+const totalTasksEl =
   document.getElementById("totalTasks");
 
-const completedTasks =
+const completedTasksEl =
   document.getElementById("completedTasks");
 
-const progressText =
+const progressPercentEl =
+  document.getElementById("progressPercent");
+
+const progressTextEl =
   document.getElementById("progressText");
 
-const progressBar =
-  document.getElementById("progressBar");
+const progressFill =
+  document.getElementById("progressFill");
 
-const dateElement =
-  document.getElementById("date");
+const focusCountEl =
+  document.getElementById("focusCount");
+
+const todayDateEl =
+  document.getElementById("todayDate");
+
+const loadingOverlay =
+  document.getElementById("loadingOverlay");
+
+const loadingTitle =
+  document.getElementById("loadingTitle");
+
+const loadingText =
+  document.getElementById("loadingText");
 
 const toast =
   document.getElementById("toast");
 
-const timerDisplay =
-  document.getElementById("timerDisplay");
 
-const timerMode =
-  document.getElementById("timerMode");
+/* =========================================================
+   STATE
+========================================================= */
 
-const studyButton =
-  document.getElementById("studyButton");
+let currentUser = null;
 
-const breakButton =
-  document.getElementById("breakButton");
+let authMode = "login";
 
-const startButton =
-  document.getElementById("startButton");
+let tasks = [];
 
-const resetButton =
-  document.getElementById("resetButton");
+let focusSessions =
+  Number(localStorage.getItem("focusSessions") || 0);
+
+let pomoMode = "study";
+
+let pomoSeconds = 25 * 60;
+
+let pomoRunning = false;
+
+let pomoInterval = null;
 
 
 /* =========================================================
-   GENERAL HELPERS
+   DATE
 ========================================================= */
 
 function getToday(){
 
   const d = new Date();
 
-  const year = d.getFullYear();
+  const year =
+    d.getFullYear();
 
   const month =
     String(d.getMonth() + 1).padStart(2,"0");
@@ -1157,55 +1542,12 @@ function getToday(){
 }
 
 
-function showToast(message,error=false){
+function displayToday(){
 
-  toast.textContent = message;
+  const d = new Date();
 
-  toast.classList.toggle("error",error);
-
-  toast.classList.add("show");
-
-  clearTimeout(showToast.timeout);
-
-  showToast.timeout =
-    setTimeout(() => {
-      toast.classList.remove("show");
-    },3500);
-}
-
-
-function escapeHTML(value){
-
-  return String(value)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
-
-function showDashboard(user){
-
-  currentUser = user;
-
-  authScreen.classList.add("hidden");
-
-  app.classList.remove("hidden");
-
-  userEmail.textContent =
-    user.email || "Authenticated";
-
-  updateDate();
-
-  loadTasks();
-}
-
-
-function updateDate(){
-
-  dateElement.textContent =
-    new Date().toLocaleDateString(
+  todayDateEl.textContent =
+    d.toLocaleDateString(
       "en-IN",
       {
         weekday:"long",
@@ -1218,141 +1560,339 @@ function updateDate(){
 
 
 /* =========================================================
-   AUTH TABS
+   TOAST
 ========================================================= */
 
-loginTab.addEventListener("click",()=>{
+let toastTimer;
 
-  authMode = "login";
+function showToast(
+  message,
+  type = ""
+){
 
-  loginTab.classList.add("active");
+  clearTimeout(toastTimer);
 
-  signupTab.classList.remove("active");
+  toast.textContent =
+    message;
 
-  authButton.textContent = "Login";
+  toast.className =
+    `show ${type}`;
 
-  authMessage.textContent = "";
+  toastTimer =
+    setTimeout(() => {
 
-});
+      toast.className = "";
 
-
-signupTab.addEventListener("click",()=>{
-
-  authMode = "signup";
-
-  signupTab.classList.add("active");
-
-  loginTab.classList.remove("active");
-
-  authButton.textContent = "Create Account";
-
-  authMessage.textContent = "";
-
-});
+    },3500);
+}
 
 
 /* =========================================================
-   SIGNUP / LOGIN
+   AUTH MESSAGE
 ========================================================= */
 
-authForm.addEventListener("submit",async event=>{
+function setAuthMessage(
+  message,
+  type = "error"
+){
 
-  event.preventDefault();
+  authMessage.textContent =
+    message;
 
-  const email =
-    emailInput.value.trim();
+  authMessage.className =
+    `auth-message ${type}`;
+}
 
-  const password =
-    passwordInput.value;
 
-  authButton.disabled = true;
+/* =========================================================
+   LOADING
+========================================================= */
 
-  authMessage.textContent = "";
+function setLoading(
+  visible,
+  title = "Building your strategy",
+  text = "Gemini is turning your routine into focused missions."
+){
 
-  try{
+  loadingOverlay.style.display =
+    visible ? "flex" : "none";
 
-    if(authMode === "signup"){
+  loadingTitle.textContent =
+    title;
 
-      const {data,error} =
-        await supabase.auth.signUp({
-          email,
-          password
-        });
+  loadingText.textContent =
+    text;
+}
 
-      if(error) throw error;
 
-      if(data.session){
+/* =========================================================
+   AUTH TABS
+========================================================= */
 
-        showDashboard(data.session.user);
+loginTab.addEventListener(
+  "click",
+  () => {
 
-      }else{
+    authMode = "login";
 
-        authMessage.textContent =
-          "Account created. Check your email for confirmation.";
-      }
+    loginTab.classList.add("active");
+    signupTab.classList.remove("active");
 
-    }else{
+    authTitle.textContent =
+      "Welcome back.";
 
-      const {data,error} =
-        await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
+    authSubtitle.textContent =
+      "Sign in to continue your daily study mission.";
 
-      if(error) throw error;
+    authButton.textContent =
+      "Enter Mission Control";
 
-      showDashboard(data.user);
+    setAuthMessage("");
+
+  }
+);
+
+
+signupTab.addEventListener(
+  "click",
+  () => {
+
+    authMode = "signup";
+
+    signupTab.classList.add("active");
+    loginTab.classList.remove("active");
+
+    authTitle.textContent =
+      "Start your mission.";
+
+    authSubtitle.textContent =
+      "Create an account and start tracking your preparation.";
+
+    authButton.textContent =
+      "Create Account";
+
+    setAuthMessage("");
+
+  }
+);
+
+
+/* =========================================================
+   AUTH
+========================================================= */
+
+authForm.addEventListener(
+  "submit",
+  async event => {
+
+    event.preventDefault();
+
+    const email =
+      emailInput.value.trim();
+
+    const password =
+      passwordInput.value;
+
+    if(!email || !password){
+
+      setAuthMessage(
+        "Enter your email and password."
+      );
+
+      return;
     }
 
-  }catch(error){
-
-    console.error(error);
-
-    authMessage.textContent =
-      error.message || "Authentication failed.";
-
-  }finally{
-
-    authButton.disabled = false;
+    authButton.disabled = true;
 
     authButton.textContent =
       authMode === "login"
-        ? "Login"
-        : "Create Account";
-  }
+        ? "Signing in..."
+        : "Creating account...";
 
-});
+    try{
+
+      if(authMode === "login"){
+
+        const {
+          data,
+          error
+        } =
+          await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+          });
+
+        if(error)
+          throw error;
+
+        currentUser =
+          data.user;
+
+        showDashboard();
+
+      }else{
+
+        const {
+          data,
+          error
+        } =
+          await supabaseClient.auth.signUp({
+            email,
+            password
+          });
+
+        if(error)
+          throw error;
+
+        if(data.session){
+
+          currentUser =
+            data.user;
+
+          showDashboard();
+
+        }else{
+
+          setAuthMessage(
+            "Account created. Check your email to confirm your account.",
+            "success"
+          );
+
+        }
+
+      }
+
+    }catch(error){
+
+      console.error(error);
+
+      setAuthMessage(
+        friendlyAuthError(error)
+      );
+
+    }finally{
+
+      authButton.disabled = false;
+
+      authButton.textContent =
+        authMode === "login"
+          ? "Enter Mission Control"
+          : "Create Account";
+
+    }
+
+  }
+);
+
+
+function friendlyAuthError(error){
+
+  const message =
+    String(error?.message || "");
+
+  if(message.toLowerCase().includes("invalid login credentials"))
+    return "Incorrect email or password.";
+
+  if(message.toLowerCase().includes("user already registered"))
+    return "This email is already registered. Try Login.";
+
+  if(message.toLowerCase().includes("password"))
+    return message;
+
+  return message ||
+    "Authentication failed. Please try again.";
+}
 
 
 /* =========================================================
    LOGOUT
 ========================================================= */
 
-logoutButton.addEventListener("click",async()=>{
+logoutBtn.addEventListener(
+  "click",
+  async () => {
 
-  await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
 
-});
+    currentUser = null;
+    tasks = [];
+
+    app.classList.add("hidden");
+    authScreen.classList.remove("hidden");
+
+    emailInput.value = "";
+    passwordInput.value = "";
+
+    setAuthMessage("");
+
+  }
+);
 
 
 /* =========================================================
-   SESSION
+   SHOW DASHBOARD
 ========================================================= */
 
-supabase.auth.onAuthStateChange(
-  (event,session)=>{
+async function showDashboard(){
+
+  authScreen.classList.add("hidden");
+  app.classList.remove("hidden");
+
+  displayToday();
+
+  updateFocusCount();
+
+  await loadTasks();
+
+}
+
+
+/* =========================================================
+   SESSION RESTORE
+========================================================= */
+
+async function restoreSession(){
+
+  try{
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient.auth.getSession();
+
+    if(error)
+      throw error;
+
+    if(data.session?.user){
+
+      currentUser =
+        data.session.user;
+
+      showDashboard();
+
+    }
+
+  }catch(error){
+
+    console.error(
+      "Session restore error:",
+      error
+    );
+
+  }
+
+}
+
+
+supabaseClient.auth.onAuthStateChange(
+  async (event, session) => {
 
     if(session?.user){
 
-      showDashboard(session.user);
+      currentUser =
+        session.user;
 
-    }else{
-
-      currentUser = null;
-
-      app.classList.add("hidden");
-
-      authScreen.classList.remove("hidden");
     }
 
   }
@@ -1360,118 +1900,51 @@ supabase.auth.onAuthStateChange(
 
 
 /* =========================================================
-   SUPABASE — SELECT
-========================================================= */
-
-async function selectTodaysTasks(){
-
-  if(!currentUser)
-    throw new Error("Not authenticated.");
-
-  const {data,error} =
-    await supabase
-      .from("tasks")
-      .select("*")
-      .eq("user_id",currentUser.id)
-      .eq("task_date",getToday())
-      .order("id",{ascending:true});
-
-  if(error) throw error;
-
-  return data || [];
-}
-
-
-/* =========================================================
-   SUPABASE — INSERT
-========================================================= */
-
-async function insertTasks(generatedTasks){
-
-  if(!currentUser)
-    throw new Error("Not authenticated.");
-
-  /*
-    IMPORTANT:
-
-    generatedTasks contains ONLY:
-
-      subject
-      task_description
-
-    The raw routine is NOT present here.
-  */
-
-  const rows =
-    generatedTasks.map(task=>({
-
-      user_id:currentUser.id,
-
-      task_date:getToday(),
-
-      subject:task.subject,
-
-      task_description:
-        task.task_description,
-
-      is_completed:false
-
-    }));
-
-
-  if(!rows.length)
-    return [];
-
-
-  const {data,error} =
-    await supabase
-      .from("tasks")
-      .insert(rows)
-      .select();
-
-
-  if(error) throw error;
-
-  return data || [];
-}
-
-
-/* =========================================================
-   SUPABASE — UPDATE
-========================================================= */
-
-async function updateTask(taskId,isCompleted){
-
-  if(!currentUser)
-    throw new Error("Not authenticated.");
-
-  const {data,error} =
-    await supabase
-      .from("tasks")
-      .update({
-        is_completed:isCompleted
-      })
-      .eq("id",taskId)
-      .eq("user_id",currentUser.id)
-      .select()
-      .single();
-
-  if(error) throw error;
-
-  return data;
-}
-
-
-/* =========================================================
-   LOAD TASKS
+   LOAD TODAY'S TASKS
 ========================================================= */
 
 async function loadTasks(){
 
+  if(!currentUser)
+    return;
+
+  tasksContainer.innerHTML = `
+    <div class="empty">
+      Loading today's missions...
+    </div>
+  `;
+
   try{
 
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from("tasks")
+        .select(
+          "id,user_id,task_date,subject,task_description,is_completed,created_at"
+        )
+        .eq(
+          "user_id",
+          currentUser.id
+        )
+        .eq(
+          "task_date",
+          getToday()
+        )
+        .order(
+          "created_at",
+          {
+            ascending:true
+          }
+        );
+
+    if(error)
+      throw error;
+
     tasks =
-      await selectTodaysTasks();
+      data || [];
 
     renderTasks();
 
@@ -1479,15 +1952,17 @@ async function loadTasks(){
 
     console.error(error);
 
-    tasks = [];
+    tasksContainer.innerHTML = `
+      <div class="empty">
+        Could not load today's missions.<br><br>
+        <small>${escapeHTML(error.message)}</small>
+      </div>
+    `;
 
-    renderTasks();
+    updateProgress();
 
-    showToast(
-      "Could not load tasks. Check Supabase table and RLS.",
-      true
-    );
   }
+
 }
 
 
@@ -1497,122 +1972,126 @@ async function loadTasks(){
 
 function renderTasks(){
 
-  taskBody.innerHTML = "";
+  if(!tasks.length){
 
-  if(tasks.length === 0){
+    tasksContainer.innerHTML = `
+      <div class="empty">
+        No missions generated yet.<br>
+        Enter your available study time above.
+      </div>
+    `;
 
-    emptyState.classList.remove("hidden");
+    updateProgress();
 
-  }else{
-
-    emptyState.classList.add("hidden");
+    return;
 
   }
 
+  tasksContainer.innerHTML =
+    tasks.map(
+      (task,index) => `
 
-  tasks.forEach(task=>{
-
-    const row =
-      document.createElement("tr");
-
-    if(task.is_completed){
-
-      row.classList.add("completed");
-
-    }
-
-
-    row.innerHTML = `
-
-      <td class="check-cell">
-
-        <input
-          class="check"
-          type="checkbox"
-          ${task.is_completed ? "checked" : ""}
-          aria-label="Mark task complete"
+        <div
+          class="task ${task.is_completed ? "completed" : ""}"
+          data-id="${escapeHTML(String(task.id))}"
         >
 
-      </td>
+          <button
+            class="check"
+            aria-label="Complete task"
+            onclick="toggleTask('${escapeJS(String(task.id))}')"
+          >
+            ${task.is_completed ? "✓" : ""}
+          </button>
 
-      <td class="subject">
-        ${escapeHTML(task.subject)}
-      </td>
+          <div>
 
-      <td class="task">
-        ${escapeHTML(task.task_description)}
-      </td>
+            <div class="task-subject">
+              ${escapeHTML(task.subject)}
+            </div>
 
-    `;
+            <div class="task-description">
+              ${escapeHTML(task.task_description)}
+            </div>
 
+          </div>
 
-    const checkbox =
-      row.querySelector(".check");
+          <div class="task-number">
+            #${index + 1}
+          </div>
 
-
-    checkbox.addEventListener(
-      "change",
-      async()=>{
-
-        const value =
-          checkbox.checked;
-
-        checkbox.disabled = true;
-
-        try{
-
-          const updated =
-            await updateTask(
-              task.id,
-              value
-            );
-
-
-          const index =
-            tasks.findIndex(
-              item => item.id === task.id
-            );
-
-
-          if(index !== -1){
-
-            tasks[index] = updated;
-
-          }
-
-
-          renderTasks();
-
-          showToast(
-            value
-              ? "Mission completed."
-              : "Mission marked incomplete."
-          );
-
-
-        }catch(error){
-
-          console.error(error);
-
-          checkbox.checked = !value;
-
-          showToast(
-            "Could not update the task.",
-            true
-          );
-
-        }
-
-      }
-    );
-
-
-    taskBody.appendChild(row);
-
-  });
-
+        </div>
+      `
+    )
+    .join("");
 
   updateProgress();
+
+}
+
+
+/* =========================================================
+   UPDATE TASK
+========================================================= */
+
+async function toggleTask(taskId){
+
+  if(!currentUser)
+    return;
+
+  const task =
+    tasks.find(
+      t => String(t.id) === String(taskId)
+    );
+
+  if(!task)
+    return;
+
+  const newValue =
+    !task.is_completed;
+
+  task.is_completed =
+    newValue;
+
+  renderTasks();
+
+  try{
+
+    const {
+      error
+    } =
+      await supabaseClient
+        .from("tasks")
+        .update({
+          is_completed:newValue
+        })
+        .eq(
+          "id",
+          task.id
+        )
+        .eq(
+          "user_id",
+          currentUser.id
+        );
+
+    if(error)
+      throw error;
+
+  }catch(error){
+
+    task.is_completed =
+      !newValue;
+
+    renderTasks();
+
+    showToast(
+      "Could not update the task.",
+      "bad"
+    );
+
+    console.error(error);
+
+  }
 
 }
 
@@ -1636,167 +2115,57 @@ function updateProgress(){
       ? Math.round((completed / total) * 100)
       : 0;
 
-  totalTasks.textContent =
+  totalTasksEl.textContent =
     total;
 
-  completedTasks.textContent =
+  completedTasksEl.textContent =
     completed;
 
-  progressText.textContent =
-    percentage + "%";
+  progressPercentEl.textContent =
+    `${percentage}%`;
 
-  progressBar.style.width =
-    percentage + "%";
+  progressTextEl.textContent =
+    `${completed} / ${total}`;
+
+  progressFill.style.width =
+    `${percentage}%`;
+
 }
 
 
 /* =========================================================
-   GEMINI GENERATOR
+   GEMINI
 ========================================================= */
 
-generatorForm.addEventListener(
-  "submit",
-  async event=>{
+const GEMINI_SYSTEM_INSTRUCTION = `
+You are a strict CBSE Class 10 study planner.
 
-    event.preventDefault();
+Distribute tasks across:
+- Maths
+- Science
+- SST
+- English
+- Hindi B
+- AI 417
 
+based on the user's available time and requested routine.
 
-    if(!currentUser){
+Create realistic, specific and actionable study tasks.
 
-      showToast(
-        "Please log in first.",
-        true
-      );
+Return ONLY a JSON array.
 
-      return;
-    }
+Every object MUST contain exactly these keys:
+"subject"
+"task_description"
 
+Do not use markdown.
+Do not include explanations.
+Do not include code fences.
+Do not include the user's original routine in the response.
+`;
 
-    const routine =
-      routineInput.value.trim();
-
-
-    if(!routine){
-
-      showToast(
-        "Enter your daily routine first.",
-        true
-      );
-
-      return;
-    }
-
-
-    /*
-      The routine exists only inside this function
-      and is sent directly to Gemini.
-    */
-
-    generateButton.disabled = true;
-
-    generateButton.innerHTML =
-      '<span class="spinner"></span>Generating...';
-
-
-    try{
-
-      const generatedTasks =
-        await generateWithGemini(routine);
-
-
-      /*
-        Only Gemini's parsed JSON reaches Supabase.
-      */
-
-      const inserted =
-        await insertTasks(
-          generatedTasks
-        );
-
-
-      /*
-        Instantly update the UI using the
-        rows returned by Supabase.
-      */
-
-      tasks = [
-        ...tasks,
-        ...inserted
-      ];
-
-      renderTasks();
-
-
-      routineInput.value = "";
-
-
-      showToast(
-        `${inserted.length} new missions added.`
-      );
-
-
-    }catch(error){
-
-      console.error(error);
-
-      showToast(
-        error.message ||
-        "Strategy generation failed.",
-        true
-      );
-
-
-    }finally{
-
-      generateButton.disabled = false;
-
-      generateButton.textContent =
-        "Generate Strategy";
-    }
-
-  }
-);
-
-
-/* =========================================================
-   GEMINI API
-========================================================= */
 
 async function generateWithGemini(routine){
-
-  const requestBody = {
-
-    system_instruction:{
-      parts:[
-        {
-          text:SYSTEM_INSTRUCTION
-        }
-      ]
-    },
-
-    contents:[
-      {
-        role:"user",
-
-        parts:[
-          {
-            /*
-              THIS is the only place the raw routine
-              is transmitted.
-            */
-            text:routine
-          }
-        ]
-      }
-    ],
-
-    generationConfig:{
-      temperature:0.35,
-      responseMimeType:"application/json"
-    }
-
-  };
-
 
   const response =
     await fetch(
@@ -1805,315 +2174,655 @@ async function generateWithGemini(routine){
         method:"POST",
 
         headers:{
-          "Content-Type":
-            "application/json"
+          "Content-Type":"application/json",
+          "x-goog-api-key":GEMINI_API_KEY
         },
 
-        body:
-          JSON.stringify(requestBody)
+        body:JSON.stringify({
+
+          system_instruction:{
+            parts:[
+              {
+                text:
+                  GEMINI_SYSTEM_INSTRUCTION
+              }
+            ]
+          },
+
+          contents:[
+            {
+              role:"user",
+
+              parts:[
+                {
+                  text:
+                    `Create today's study plan from this routine:\n${routine}`
+                }
+              ]
+            }
+          ],
+
+          generationConfig:{
+            temperature:0.25,
+            responseMimeType:"application/json",
+
+            responseSchema:{
+              type:"ARRAY",
+
+              items:{
+                type:"OBJECT",
+
+                properties:{
+                  subject:{
+                    type:"STRING"
+                  },
+
+                  task_description:{
+                    type:"STRING"
+                  }
+                },
+
+                required:[
+                  "subject",
+                  "task_description"
+                ]
+              }
+            }
+          }
+
+        })
       }
     );
 
 
-  if(!response.ok){
+  let payload = null;
 
-    const errorText =
-      await response.text();
-
-    throw new Error(
-      `Gemini API error ${response.status}: ${errorText.slice(0,300)}`
-    );
+  try{
+    payload =
+      await response.json();
+  }catch{
+    payload = null;
   }
 
 
-  const result =
-    await response.json();
+  if(!response.ok){
+
+    console.error(
+      "Gemini API response:",
+      payload
+    );
+
+    const apiMessage =
+      payload?.error?.message ||
+      `Gemini request failed (${response.status}).`;
+
+    if(
+      response.status === 400 ||
+      response.status === 401 ||
+      response.status === 403
+    ){
+
+      throw new Error(
+        `Gemini API error: ${apiMessage}`
+      );
+
+    }
+
+    throw new Error(
+      apiMessage
+    );
+
+  }
 
 
-  const text =
-    result
+  const rawText =
+    payload
       ?.candidates?.[0]
-      ?.content?.parts
-      ?.map(part=>part.text || "")
+      ?.content
+      ?.parts
+      ?.map(
+        part => part.text || ""
+      )
       .join("")
       .trim();
 
 
-  if(!text){
+  if(!rawText){
 
     throw new Error(
-      "Gemini returned an empty response."
+      "Gemini returned an empty study plan."
     );
+
   }
-
-
-  /*
-    Remove accidental markdown fences if Gemini
-    ignores the instruction.
-  */
-
-  const cleaned =
-    text
-      .replace(/^```json\s*/i,"")
-      .replace(/^```\s*/i,"")
-      .replace(/\s*```$/i,"")
-      .trim();
 
 
   let parsed;
 
-
   try{
 
     parsed =
-      JSON.parse(cleaned);
+      JSON.parse(rawText);
 
   }catch(error){
+
+    console.error(
+      "Gemini raw output:",
+      rawText
+    );
 
     throw new Error(
       "Gemini returned invalid JSON."
     );
+
   }
 
 
-  if(!Array.isArray(parsed)){
-
+  if(!Array.isArray(parsed))
     throw new Error(
-      "Gemini response is not an array."
+      "Gemini did not return a task list."
     );
-  }
 
 
-  /*
-    Strictly retain only the two permitted fields.
-  */
-
-  const valid =
+  const cleanTasks =
     parsed
-      .map(item=>({
-
+      .map(item => ({
         subject:
-          typeof item?.subject === "string"
-            ? item.subject.trim()
-            : "",
+          String(item.subject || "").trim(),
 
         task_description:
-          typeof item?.task_description === "string"
-            ? item.task_description.trim()
-            : ""
-
+          String(item.task_description || "").trim()
       }))
-      .filter(item=>
-        item.subject &&
-        item.task_description
-      );
+      .filter(
+        item =>
+          item.subject &&
+          item.task_description
+      )
+      .slice(0,30);
 
 
-  if(!valid.length){
-
+  if(!cleanTasks.length)
     throw new Error(
-      "No valid study tasks were generated."
+      "Gemini returned no usable tasks."
     );
-  }
 
 
-  return valid;
+  return cleanTasks;
+
 }
 
 
 /* =========================================================
-   POMODORO TIMER
+   GENERATE STRATEGY
 ========================================================= */
 
-function setTimerMode(mode){
+generateBtn.addEventListener(
+  "click",
+  generateStrategy
+);
 
-  stopTimer();
 
-  timerModeState = mode;
+routineInput.addEventListener(
+  "keydown",
+  event => {
+
+    if(
+      event.key === "Enter" &&
+      !event.shiftKey
+    ){
+
+      event.preventDefault();
+
+      generateStrategy();
+
+    }
+
+  }
+);
 
 
-  if(mode === "study"){
+async function generateStrategy(){
 
-    timerSeconds =
-      25 * 60;
+  if(!currentUser){
 
-    timerMode.textContent =
-      "Study";
-
-    studyButton.classList.add(
-      "selected"
+    showToast(
+      "Please log in first.",
+      "bad"
     );
 
-    breakButton.classList.remove(
-      "selected"
-    );
+    return;
 
-  }else{
-
-    timerSeconds =
-      5 * 60;
-
-    timerMode.textContent =
-      "Coffee Break";
-
-    breakButton.classList.add(
-      "selected"
-    );
-
-    studyButton.classList.remove(
-      "selected"
-    );
   }
 
 
-  updateTimer();
+  const routine =
+    routineInput.value.trim();
+
+
+  if(!routine){
+
+    showToast(
+      "Tell me how much time you have today.",
+      "bad"
+    );
+
+    routineInput.focus();
+
+    return;
+
+  }
+
+
+  if(routine.length < 8){
+
+    showToast(
+      "Give the planner a little more detail.",
+      "bad"
+    );
+
+    return;
+
+  }
+
+
+  generateBtn.disabled =
+    true;
+
+  generateBtn.textContent =
+    "Planning...";
+
+
+  setLoading(
+    true,
+    "Building your strategy",
+    "Gemini is converting your available time into focused missions."
+  );
+
+
+  try{
+
+    /*
+      IMPORTANT:
+      The routine is NOT saved.
+      It is sent only to Gemini.
+    */
+
+    const aiTasks =
+      await generateWithGemini(routine);
+
+
+    setLoading(
+      true,
+      "Saving missions",
+      "Your generated tasks are being added to today's command centre."
+    );
+
+
+    const rows =
+      aiTasks.map(
+        task => ({
+          user_id:
+            currentUser.id,
+
+          task_date:
+            getToday(),
+
+          subject:
+            task.subject,
+
+          task_description:
+            task.task_description,
+
+          is_completed:
+            false
+        })
+      );
+
+
+    /*
+      Only AI-generated task fields
+      are inserted into Supabase.
+    */
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from("tasks")
+        .insert(rows)
+        .select(
+          "id,user_id,task_date,subject,task_description,is_completed,created_at"
+        );
+
+
+    if(error)
+      throw error;
+
+
+    /*
+      Add newly created missions
+      to current task list.
+    */
+
+    tasks =
+      [
+        ...tasks,
+        ...(data || [])
+      ];
+
+
+    renderTasks();
+
+    routineInput.value = "";
+
+    showToast(
+      `${data?.length || aiTasks.length} missions added to today's plan.`,
+      "good"
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "Strategy generation error:",
+      error
+    );
+
+    showToast(
+      error.message ||
+      "Could not generate the strategy.",
+      "bad"
+    );
+
+  }finally{
+
+    setLoading(false);
+
+    generateBtn.disabled =
+      false;
+
+    generateBtn.textContent =
+      "Generate Strategy";
+
+  }
+
 }
 
 
-function updateTimer(){
+/* =========================================================
+   POMODORO
+========================================================= */
+
+const timerEl =
+  document.getElementById("timer");
+
+const pomoModeEl =
+  document.getElementById("pomoMode");
+
+const pomoRing =
+  document.getElementById("pomoRing");
+
+const startPauseBtn =
+  document.getElementById("startPauseBtn");
+
+const resetTimerBtn =
+  document.getElementById("resetTimerBtn");
+
+const studyModeBtn =
+  document.getElementById("studyModeBtn");
+
+const breakModeBtn =
+  document.getElementById("breakModeBtn");
+
+
+function setPomoMode(mode){
+
+  stopTimer();
+
+  pomoMode =
+    mode;
+
+  pomoSeconds =
+    mode === "study"
+      ? 25 * 60
+      : 5 * 60;
+
+  pomoModeEl.textContent =
+    mode === "study"
+      ? "Study"
+      : "Coffee Break";
+
+  studyModeBtn.classList.toggle(
+    "active",
+    mode === "study"
+  );
+
+  breakModeBtn.classList.toggle(
+    "active",
+    mode === "break"
+  );
+
+  startPauseBtn.textContent =
+    "Start";
+
+  updateTimerUI();
+
+}
+
+
+function updateTimerUI(){
 
   const minutes =
-    Math.floor(timerSeconds / 60)
-      .toString()
-      .padStart(2,"0");
+    Math.floor(
+      pomoSeconds / 60
+    );
 
   const seconds =
-    (timerSeconds % 60)
-      .toString()
-      .padStart(2,"0");
+    pomoSeconds % 60;
+
+  timerEl.textContent =
+    `${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
 
 
-  timerDisplay.textContent =
-    `${minutes}:${seconds}`;
+  const total =
+    pomoMode === "study"
+      ? 25 * 60
+      : 5 * 60;
+
+  const elapsed =
+    total - pomoSeconds;
+
+  const percent =
+    Math.min(
+      100,
+      Math.max(
+        0,
+        (elapsed / total) * 100
+      )
+    );
+
+  pomoRing.style.setProperty(
+    "--progress",
+    `${percent}%`
+  );
+
+}
+
+
+function startTimer(){
+
+  if(pomoRunning)
+    return;
+
+  pomoRunning =
+    true;
+
+  startPauseBtn.textContent =
+    "Pause";
+
+
+  pomoInterval =
+    setInterval(
+      () => {
+
+        pomoSeconds--;
+
+        updateTimerUI();
+
+
+        if(pomoSeconds <= 0){
+
+          stopTimer();
+
+          if(pomoMode === "study"){
+
+            focusSessions++;
+
+            localStorage.setItem(
+              "focusSessions",
+              focusSessions
+            );
+
+            updateFocusCount();
+
+            showToast(
+              "Study session complete. Time for a 5-minute Coffee Break.",
+              "good"
+            );
+
+            setPomoMode("break");
+
+          }else{
+
+            showToast(
+              "Break complete. Ready for another Study session?",
+              "good"
+            );
+
+            setPomoMode("study");
+
+          }
+
+        }
+
+      },
+      1000
+    );
+
 }
 
 
 function stopTimer(){
 
-  clearInterval(timerInterval);
+  pomoRunning =
+    false;
 
-  timerInterval = null;
+  clearInterval(
+    pomoInterval
+  );
 
-  timerRunning = false;
+  pomoInterval =
+    null;
 
-  startButton.textContent =
+  startPauseBtn.textContent =
     "Start";
+
 }
 
 
-function toggleTimer(){
+function resetTimer(){
 
-  if(timerRunning){
+  stopTimer();
 
-    stopTimer();
+  pomoSeconds =
+    pomoMode === "study"
+      ? 25 * 60
+      : 5 * 60;
 
-    return;
-  }
+  updateTimerUI();
 
-
-  timerRunning = true;
-
-  startButton.textContent =
-    "Pause";
+}
 
 
-  timerInterval =
-    setInterval(()=>{
+startPauseBtn.addEventListener(
+  "click",
+  () => {
 
-      if(timerSeconds > 0){
-
-        timerSeconds--;
-
-        updateTimer();
-
-        return;
-      }
-
-
+    if(pomoRunning)
       stopTimer();
 
+    else
+      startTimer();
 
-      if(timerModeState === "study"){
+  }
+);
 
-        showToast(
-          "Study session complete. Time for a 5-minute break."
-        );
 
-        setTimerMode("break");
+resetTimerBtn.addEventListener(
+  "click",
+  resetTimer
+);
 
-      }else{
 
-        showToast(
-          "Break complete. Back to study."
-        );
+studyModeBtn.addEventListener(
+  "click",
+  () => setPomoMode("study")
+);
 
-        setTimerMode("study");
-      }
 
-    },1000);
+breakModeBtn.addEventListener(
+  "click",
+  () => setPomoMode("break")
+);
+
+
+function updateFocusCount(){
+
+  focusCountEl.textContent =
+    focusSessions;
+
 }
-
-
-studyButton.addEventListener(
-  "click",
-  ()=>setTimerMode("study")
-);
-
-breakButton.addEventListener(
-  "click",
-  ()=>setTimerMode("break")
-);
-
-startButton.addEventListener(
-  "click",
-  toggleTimer
-);
-
-resetButton.addEventListener(
-  "click",
-  ()=>setTimerMode(timerModeState)
-);
 
 
 /* =========================================================
-   STARTUP
+   SECURITY / HTML ESCAPING
 ========================================================= */
 
-updateDate();
+function escapeHTML(value){
 
-updateTimer();
+  return String(value)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 
-
-(async()=>{
-
-  try{
-
-    const {
-      data:{
-        session
-      }
-    } =
-      await supabase.auth.getSession();
+}
 
 
-    if(session?.user){
+function escapeJS(value){
 
-      showDashboard(
-        session.user
-      );
+  return String(value)
+    .replaceAll("\\","\\\\")
+    .replaceAll("'","\\'")
+    .replaceAll("\n","\\n")
+    .replaceAll("\r","\\r");
 
-    }
+}
 
-  }catch(error){
 
-    console.error(
-      "Startup error:",
-      error
-    );
+/* =========================================================
+   START
+========================================================= */
 
-  }
+updateTimerUI();
 
-})();
+updateFocusCount();
+
+displayToday();
+
+restoreSession();
+
 </script>
 
 </body>
