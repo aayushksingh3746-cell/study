@@ -1,7 +1,20 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
-import { getDatabase } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js';
-import { getStorage } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js';
+import {
+  initializeApp,
+  getApps,
+  getApp
+} from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+
+import {
+  getAuth
+} from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+
+import {
+  getDatabase
+} from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js';
+
+import {
+  getStorage
+} from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDQ3bYoj549-7hFeieHHMAValS757IWsTY',
@@ -13,8 +26,12 @@ const firebaseConfig = {
   measurementId: 'G-PYCYLLF5E2'
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length
+  ? getApp()
+  : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getDatabase(app);
 export const storage = getStorage(app);
+
+export default app;
