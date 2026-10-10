@@ -1,8 +1,7 @@
 // ============================================================
 // MATH CLASS — STUDENT MODULE
 // File: student.js
-// Firebase SDK: 10.5.0 Modular
-// Corrected version based on the original implementation
+// Firebase Modular SDK 10.5.0
 // ============================================================
 
 import {
@@ -21,12 +20,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
 
 import {
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
-
-import {
   updateProfile,
   updatePassword,
   reauthenticateWithCredential,
@@ -38,59 +31,69 @@ import {
   formatDate,
   formatDateTime,
   formatDuration,
-  getInitials,
-  createStatusBadge,
-  createEmptyState,
-  createSkeleton,
-  setFieldError,
-  validateRequired,
-  validateFileSize,
-  openModal
+  getInitials
 } from "./components.js";
 
 // ============================================================
-// STATE
+// CONFIGURATION
 // ============================================================
 
-const studentState = {
-  auth: null,
-  db: null,
-  storage: null,
-  user: null,
-  profile: null,
-  toast: null,
-  showPage: null,
-
-  initialized: false,
-  unsubscribers: [],
-  records: [],
-  announcements: [],
-  chatMessages: [],
-  doubts: [],
-
-  activeDate: new Date().toISOString().slice(0, 10),
-  submitting: false,
-  currentPage: "dashboard",
-  pageChangeHandler: null
-};
-
-// These paths must match the database structure used by the
-// rest of the Math Class application.
-const PATHS = {
+const PATHS = Object.freeze({
   users: "users",
   logs: "daily_study_logs",
   announcements: "announcements",
   chat: "class_chat",
   doubts: "direct_doubts"
-};
+});
 
-const MAX_PROOF_SIZE_MB = 5;
-const MAX_CHAT_LENGTH = 1000;
-const MAX_DOUBT_LENGTH = 3000;
-const MAX_REMARKS_LENGTH = 500;
+const LIMITS = Object.freeze({
+  logs: 500,
+  announcements: 200,
+  chat: 100,
+  doubts: 200,
+  chatLength: 1000,
+  doubtLength: 3000,
+  topicLength: 150,
+  remarksLength: 500,
+  nameLength: 100,
+  requestTimeout: 15000
+});
 
 // ============================================================
-// HELPERS
+// STATE
+// ============================================================
+
+const state = {
+  auth: null,
+  db: null,
+  storage: null,
+
+  user: null,
+  profile: null,
+
+  toast: null,
+  showPage: null,
+
+  initialized: false,
+  submitting: false,
+
+  currentPage: "dashboard",
+  activeDate: new Date().toISOString().slice(0, 10),
+
+  records: [],
+  announcements: [],
+  chatMessages: [],
+  doubts: [],
+
+  unsubscribers: [],
+  pageChangeHandler: null,
+  authReadyHandler: null,
+  delegatedClickHandler: null,
+  delegatedSubmitHandler: null
+};
+
+// ============================================================
+// DOM HELPERS
 // ============================================================
 
 const $ = (selector, root = document) =>
@@ -99,45 +102,16 @@ const $ = (selector, root = document) =>
 const $$ = (selector, root = document) =>
   [...root.querySelectorAll(selector)];
 
-function notify(message, type = "info") {
-  if (typeof studentState.toast === "function") {
-    studentState.toast(message, type);
-  } else {
-    console[type === "error" ? "error" : "log"](message);
-  }
-}
-
-function uid() {
-  return studentState.user?.uid || "";
-}
-
-function currentUserName() {
-  return (
-    studentState.profile?.name ||
-    studentState.profile?.displayName ||
-    studentState.user?.displayName ||
-    studentState.user?.email?.split("@")[0] ||
-    "Student"
-  );
-}
-
-function now() {
-  return Date.now();
-}
-
-function safeNumber(value, min = 0, max = Number.MAX_SAFE_INTEGER) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) return min;
-
-  return Math.min(max, Math.max(min, Math.floor(number)));
-}
-
-function createElement(tag, className, text) {
+function createElement(tag, className = "", text = "") {
   const element = document.createElement(tag);
 
-  if (className) element.className = className;
-  if (text !== undefined) element.textContent = text;
+  if (className) {
+    element.className = className;
+  }
+
+  if (text !== undefined && text !== null) {
+    element.textContent = String(text);
+  }
 
   return element;
 }
@@ -145,27 +119,80 @@ function createElement(tag, className, text) {
 function setText(selector, value) {
   const element = $(selector);
 
-  if (element) element.textContent = value;
+  if (element) {
+    element.textContent = String(value ?? "");
+  }
 }
 
-function formatError(error) {
-  const code = error?.code || "";
+function uid() {
+  return state.user?.uid || "";
+}
+
+function userName() {
+  return (
+    state.profile?.name ||
+    state.profile?.displayName ||
+    state.user?.displayName ||
+    state.user?.email?.split("@")[0] ||
+    "Student"
+  );
+}
+
+function currentTime() {
+  return Date.now();
+}
+
+function safeNumber(value, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return min;
+  }
+
+  return Math.min(max, Math.max(min, Math.floor(number)));
+}
+
+function normalizeRecords(value) {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  return Object.entries(value)
+    .filter(([, item]) =>
+      item &&
+      typeof item === "object" &&
+      !Array.isArray(item)
+    )
+    .map(([key, item]) => ({
+      ...item,
+      id: item.id || key
+    }));
+}
+
+function escape(value) {
+  if (typeof escapeHTML === "function") {
+    return escapeHTML(String(value ?? ""));
+  }
+
+  const element = document.createElement("span");
+  element.textContent = String(value ?? "");
+
+  return element.innerHTML;
+}
+
+// ============================================================
+// ERROR HANDLING
+// ============================================================
+
+function readableError(error) {
+  const code = String(error?.code || "");
 
   const messages = {
     "PERMISSION_DENIED":
-      "Firebase denied access. Check your Realtime Database rules.",
+      "Firebase denied access. Check the Realtime Database security rules.",
 
     "database/permission-denied":
-      "Firebase denied access. Check the database rules and the requested path.",
-
-    "storage/unauthorized":
-      "You don't have permission to upload this file.",
-
-    "storage/canceled":
-      "The upload was cancelled.",
-
-    "storage/retry-limit-exceeded":
-      "The upload failed after several attempts. Try again.",
+      "You do not have permission to perform this operation.",
 
     "auth/requires-recent-login":
       "Please sign in again before changing your password.",
@@ -177,147 +204,177 @@ function formatError(error) {
       "Your current password is incorrect.",
 
     "auth/weak-password":
-      "Your new password must contain at least 6 characters.",
+      "Your new password does not meet the password requirements.",
 
     "auth/network-request-failed":
-      "Network error. Check your internet connection."
+      "Network error. Check your internet connection.",
+
+    "app/timeout":
+      "The request timed out. Check your connection and try again.",
+
+    "app/validation":
+      error.message || "Please check the information you entered."
   };
 
-  return messages[code] || error?.message || "Something went wrong.";
-}
-
-function showError(error, context = "Operation failed") {
-  console.error(`[Math Class Student] ${context}:`, error);
-  notify(`${context}: ${formatError(error)}`, "error");
-}
-
-function subscribe(path, callback, onError = null, source = null) {
-  if (!studentState.db) {
-    const error = new Error("Firebase Realtime Database is not initialized.");
-    showError(error, `Cannot subscribe to ${path}`);
-    return () => {};
+  if (messages[code]) {
+    return messages[code];
   }
 
-  const databaseReference = source || ref(studentState.db, path);
+  if (code.startsWith("auth/")) {
+    return "Authentication failed. Please try again.";
+  }
+
+  if (code.startsWith("storage/")) {
+    return "The file operation failed. Check your Storage configuration and permissions.";
+  }
+
+  if (code === "PERMISSION_DENIED") {
+    return messages.PERMISSION_DENIED;
+  }
+
+  return "Something went wrong. Please try again.";
+}
+
+function notify(message, type = "info") {
+  if (typeof state.toast === "function") {
+    state.toast(message, type);
+    return;
+  }
+
+  console[type === "error" ? "error" : "log"](message);
+}
+
+function reportError(error, operation) {
+  console.error(
+    `[Math Class Student] ${operation}:`,
+    error?.code || "unknown-error"
+  );
+
+  notify(
+    `${operation}: ${readableError(error)}`,
+    "error"
+  );
+}
+
+function validationError(message) {
+  const error = new Error(message);
+  error.code = "app/validation";
+
+  return error;
+}
+
+// ============================================================
+// ASYNC HELPERS
+// ============================================================
+
+function withTimeout(
+  promise,
+  milliseconds = LIMITS.requestTimeout
+) {
+  let timer;
+
+  return Promise.race([
+    Promise.resolve(promise),
+
+    new Promise((_, reject) => {
+      timer = window.setTimeout(() => {
+        const error = new Error(
+          "The operation took too long."
+        );
+
+        error.code = "app/timeout";
+        reject(error);
+      }, milliseconds);
+    })
+  ]).finally(() => {
+    window.clearTimeout(timer);
+  });
+}
+
+function readValue(path) {
+  return withTimeout(
+    get(ref(state.db, path))
+  );
+}
+
+function writeValue(path, value) {
+  return withTimeout(
+    set(ref(state.db, path), value)
+  );
+}
+
+function patchValue(path, value) {
+  return withTimeout(
+    update(ref(state.db, path), value)
+  );
+}
+
+// ============================================================
+// FIREBASE LISTENERS
+// ============================================================
+
+function subscribe(
+  databaseReference,
+  callback,
+  onError = null
+) {
+  if (!state.db) {
+    throw new Error(
+      "Realtime Database has not been initialized."
+    );
+  }
 
   const unsubscribe = onValue(
     databaseReference,
 
     snapshot => {
+      if (!state.initialized) {
+        return;
+      }
+
       try {
         callback(snapshot.val(), snapshot);
       } catch (error) {
-        console.error(
-          `[Math Class Student] Failed to process data from "${path}":`,
-          error
+        reportError(
+          error,
+          "Could not process updated information"
         );
-
-        if (onError) {
-          onError(error);
-        } else {
-          notify(
-            `Information from "${path}" could not be displayed.`,
-            "error"
-          );
-        }
       }
     },
 
     error => {
-      console.error(
-        `[Math Class Student] Firebase listener failed at "${path}".`,
-        error
-      );
+      if (!state.initialized) {
+        return;
+      }
 
-      if (onError) {
+      if (typeof onError === "function") {
         onError(error);
       } else {
-        notify(
-          `Unable to load "${path}". Check Firebase permissions and database paths.`,
-          "error"
+        reportError(
+          error,
+          "Could not load information"
         );
       }
     }
   );
 
-  studentState.unsubscribers.push(unsubscribe);
+  state.unsubscribers.push(unsubscribe);
 
   return unsubscribe;
 }
 
-function readValue(path) {
-  return get(ref(studentState.db, path));
-}
-
-function writeValue(path, value) {
-  return set(ref(studentState.db, path), value);
-}
-
-function patchValue(path, value) {
-  return update(ref(studentState.db, path), value);
-}
-
-function makeButton(label, action, variant = "primary") {
-  const button = createElement(
-    "button",
-    `mc-button mc-button-${variant}`,
-    label
-  );
-
-  button.type = "button";
-
-  if (action) button.addEventListener("click", action);
-
-  return button;
-}
-
-function makeField(labelText, name, type = "text", options = {}) {
-  const wrapper = createElement("div", "student-form-field");
-
-  const label = createElement("label", "", labelText);
-  label.htmlFor = `student-${name}`;
-
-  let field;
-
-  if (type === "textarea") {
-    field = document.createElement("textarea");
-    field.rows = options.rows || 3;
-  } else if (type === "select") {
-    field = document.createElement("select");
-
-    (options.options || []).forEach(option => {
-      const item = document.createElement("option");
-
-      item.value = option.value;
-      item.textContent = option.label;
-
-      field.appendChild(item);
-    });
-  } else {
-    field = document.createElement("input");
-    field.type = type;
+function cleanupListeners() {
+  for (const unsubscribe of state.unsubscribers) {
+    try {
+      unsubscribe();
+    } catch (error) {
+      console.warn(
+        "[Math Class Student] Listener cleanup failed."
+      );
+    }
   }
 
-  field.id = `student-${name}`;
-  field.name = name;
-  field.required = Boolean(options.required);
-
-  if (options.min !== undefined) field.min = options.min;
-  if (options.max !== undefined) field.max = options.max;
-
-  if (options.maxLength !== undefined) {
-    field.maxLength = options.maxLength;
-  }
-
-  if (options.placeholder) {
-    field.placeholder = options.placeholder;
-  }
-
-  if (options.accept) field.accept = options.accept;
-
-  wrapper.append(label, field);
-
-  return { wrapper, field };
+  state.unsubscribers = [];
 }
 
 // ============================================================
@@ -325,7 +382,9 @@ function makeField(labelText, name, type = "text", options = {}) {
 // ============================================================
 
 function injectStyles() {
-  if ($("#student-module-styles")) return;
+  if ($("#student-module-styles")) {
+    return;
+  }
 
   const style = document.createElement("style");
   style.id = "student-module-styles";
@@ -333,41 +392,21 @@ function injectStyles() {
   style.textContent = `
     .student-dashboard {
       display: grid;
-      gap: 24px;
+      gap: 22px;
       width: 100%;
       min-width: 0;
+      color: #111827;
     }
 
     .student-dashboard[hidden] {
       display: none !important;
     }
 
-    .student-welcome {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 20px;
-      flex-wrap: wrap;
-      padding: 28px;
-      background: #FFFFFF;
-      border: 1px solid #E2E8F0;
-      border-radius: 18px;
-    }
-
-    .student-eyebrow {
-      color: #64748B;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1.3px;
-      font-weight: 700;
-    }
-
     .student-heading {
-      margin: 8px 0;
-      color: #111827;
-      font-size: clamp(23px, 3vw, 32px);
-      font-weight: 750;
-      letter-spacing: -1px;
+      margin: 0 0 8px;
+      font-size: clamp(24px, 3vw, 32px);
+      line-height: 1.2;
+      letter-spacing: -.7px;
     }
 
     .student-subtitle {
@@ -377,18 +416,34 @@ function injectStyles() {
       line-height: 1.7;
     }
 
+    .student-welcome {
+      padding: 26px;
+      border: 1px solid #E2E8F0;
+      border-radius: 18px;
+      background: #FFFFFF;
+    }
+
+    .student-eyebrow {
+      margin: 0 0 8px;
+      color: #6366F1;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
     .student-stats {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
+      gap: 14px;
     }
 
     .student-stat-card {
-      padding: 20px;
-      background: #FFFFFF;
-      border: 1px solid #E2E8F0;
-      border-radius: 15px;
       min-width: 0;
+      padding: 19px;
+      border: 1px solid #E2E8F0;
+      border-radius: 14px;
+      background: #FFFFFF;
     }
 
     .student-stat-label {
@@ -398,25 +453,24 @@ function injectStyles() {
     }
 
     .student-stat-value {
-      color: #111827;
-      font-size: 27px;
-      font-weight: 750;
-      letter-spacing: -.8px;
       overflow-wrap: anywhere;
+      color: #111827;
+      font-size: 26px;
+      font-weight: 750;
     }
 
     .student-stat-caption {
-      margin-top: 7px;
+      margin-top: 6px;
       color: #64748B;
       font-size: 12px;
     }
 
     .student-section {
-      padding: 22px;
-      border: 1px solid #E2E8F0;
-      border-radius: 16px;
-      background: #FFFFFF;
       min-width: 0;
+      padding: 21px;
+      border: 1px solid #E2E8F0;
+      border-radius: 15px;
+      background: #FFFFFF;
     }
 
     .student-section-heading {
@@ -425,42 +479,40 @@ function injectStyles() {
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 12px;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .student-section-heading h2 {
       margin: 0;
       font-size: 17px;
       font-weight: 750;
-      color: #111827;
     }
 
     .student-section-heading p {
       margin: 5px 0 0;
-      font-size: 13px;
       color: #64748B;
+      font-size: 13px;
     }
 
     .student-list {
       display: grid;
-      gap: 12px;
+      gap: 11px;
     }
 
     .student-list-item {
       display: flex;
-      justify-content: space-between;
       align-items: flex-start;
+      justify-content: space-between;
       flex-wrap: wrap;
       gap: 12px;
-      padding: 15px;
+      padding: 14px;
       border: 1px solid #E2E8F0;
-      border-radius: 12px;
+      border-radius: 11px;
       background: #FFFFFF;
     }
 
     .student-list-item h3 {
       margin: 0 0 6px;
-      color: #111827;
       font-size: 14px;
     }
 
@@ -475,7 +527,7 @@ function injectStyles() {
     .student-form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 17px;
+      gap: 16px;
     }
 
     .student-form-field {
@@ -495,11 +547,10 @@ function injectStyles() {
     .student-form-field textarea {
       box-sizing: border-box;
       width: 100%;
-      min-height: 44px;
+      min-height: 43px;
       padding: 11px 12px;
       border: 1px solid #CBD5E1;
-      border-radius: 10px;
-      outline: none;
+      border-radius: 9px;
       background: #FFFFFF;
       color: #111827;
       font: inherit;
@@ -507,15 +558,15 @@ function injectStyles() {
     }
 
     .student-form-field textarea {
-      min-height: 90px;
+      min-height: 95px;
       resize: vertical;
     }
 
     .student-form-field input:focus,
     .student-form-field select:focus,
     .student-form-field textarea:focus {
+      outline: 2px solid #C7D2FE;
       border-color: #6366F1;
-      box-shadow: 0 0 0 3px rgba(99,102,241,.12);
     }
 
     .student-form-full {
@@ -527,49 +578,125 @@ function injectStyles() {
       justify-content: flex-end;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 20px;
+      margin-top: 18px;
+    }
+
+    .mc-button {
+      min-height: 40px;
+      padding: 10px 15px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .mc-button:disabled {
+      cursor: not-allowed;
+      opacity: .6;
+    }
+
+    .mc-button-primary {
+      background: #4F46E5;
+      color: #FFFFFF;
+    }
+
+    .mc-button-secondary {
+      border-color: #CBD5E1;
+      background: #FFFFFF;
+      color: #334155;
+    }
+
+    .mc-button-danger {
+      background: #B91C1C;
+      color: #FFFFFF;
     }
 
     .student-progress-track {
       height: 8px;
       overflow: hidden;
-      background: #E2E8F0;
       border-radius: 99px;
+      background: #E2E8F0;
     }
 
     .student-progress-fill {
       height: 100%;
-      background: #4F46E5;
       border-radius: inherit;
-      transition: width .3s ease;
+      background: #4F46E5;
+      transition: width .25s ease;
+    }
+
+    .student-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 9px;
+      border-radius: 99px;
+      background: #EEF2FF;
+      color: #4338CA;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .student-empty {
+      padding: 25px 14px;
+      text-align: center;
+      color: #64748B;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .student-announcement {
+      padding: 17px;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      background: #FFFFFF;
+    }
+
+    .student-announcement h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .student-announcement p {
+      margin: 0;
+      color: #475569;
+      font-size: 13px;
+      line-height: 1.7;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
     }
 
     .student-chat {
       display: grid;
-      grid-template-rows: minmax(240px, 420px) auto;
-      gap: 15px;
+      gap: 13px;
     }
 
     .student-chat-messages {
+      display: flex;
+      flex-direction: column;
+      min-height: 250px;
+      max-height: 430px;
+      gap: 10px;
       overflow-y: auto;
-      padding: 14px;
+      padding: 13px;
       border: 1px solid #E2E8F0;
-      border-radius: 12px;
+      border-radius: 11px;
       background: #F8FAFC;
     }
 
     .student-chat-message {
       max-width: 90%;
-      margin-bottom: 12px;
-      padding: 12px;
+      align-self: flex-start;
+      padding: 11px 13px;
       border: 1px solid #E2E8F0;
-      border-radius: 12px;
+      border-radius: 11px;
       background: #FFFFFF;
       overflow-wrap: anywhere;
     }
 
     .student-chat-message.mine {
-      margin-left: auto;
+      align-self: flex-end;
       border-color: #C7D2FE;
       background: #EEF2FF;
     }
@@ -585,71 +712,42 @@ function injectStyles() {
     }
 
     .student-chat-body {
+      white-space: pre-wrap;
       color: #334155;
       font-size: 14px;
-      line-height: 1.65;
-      white-space: pre-wrap;
+      line-height: 1.6;
     }
 
     .student-chat-compose {
       display: flex;
       align-items: stretch;
-      gap: 10px;
+      gap: 9px;
     }
 
     .student-chat-compose textarea {
+      box-sizing: border-box;
       flex: 1;
       min-width: 0;
-      min-height: 48px;
+      min-height: 45px;
       max-height: 130px;
-      padding: 12px;
+      padding: 11px;
       border: 1px solid #CBD5E1;
-      border-radius: 10px;
+      border-radius: 9px;
       font: inherit;
       resize: vertical;
     }
 
-    .student-announcement {
-      padding: 18px;
-      border: 1px solid #E2E8F0;
-      border-radius: 13px;
-      background: #FFFFFF;
-    }
-
-    .student-announcement h3 {
-      margin: 0 0 8px;
-      color: #111827;
-      font-size: 16px;
-    }
-
-    .student-announcement p {
-      color: #475569;
-      font-size: 14px;
-      line-height: 1.75;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .student-announcement-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
+    .student-muted {
       color: #64748B;
       font-size: 12px;
     }
 
-    .student-muted {
-      color: #64748B;
-      font-size: 13px;
-    }
-
-    .student-inline-error {
-      margin: 12px 0;
+    .student-error {
       padding: 12px;
-      color: #991B1B;
-      background: #FEF2F2;
       border: 1px solid #FECACA;
-      border-radius: 10px;
+      border-radius: 9px;
+      background: #FEF2F2;
+      color: #991B1B;
       font-size: 13px;
     }
 
@@ -659,21 +757,18 @@ function injectStyles() {
       }
     }
 
-    @media (max-width: 600px) {
-      .student-welcome {
-        padding: 20px;
-      }
-
-      .student-section {
-        padding: 16px;
-      }
-
+    @media (max-width: 560px) {
       .student-form-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .student-form-full {
         grid-column: auto;
+      }
+
+      .student-section,
+      .student-welcome {
+        padding: 16px;
       }
 
       .student-chat-compose {
@@ -690,63 +785,104 @@ function injectStyles() {
 }
 
 // ============================================================
-// PAGE CONTAINER HELPERS
+// ELEMENT BUILDERS
 // ============================================================
 
-function getPageContainer(page, title, description = "") {
-  let section = $(`[data-page="${page}"]`);
+function makeButton(label, action, variant = "primary") {
+  const button = createElement(
+    "button",
+    `mc-button mc-button-${variant}`,
+    label
+  );
 
-  if (!section) {
-    const appView =
-      $("#appView") ||
-      $("#pageContent") ||
-      $("#mainContent") ||
-      $("#dashboardView") ||
-      $("#application") ||
-      $("main") ||
-      document.body;
+  button.type = "button";
 
-    section = createElement("section", "student-dashboard");
-    section.dataset.page = page;
-    section.hidden = true;
-
-    const heading = createElement("h1", "student-heading", title);
-    const subtitle = createElement("p", "student-subtitle", description);
-
-    section.append(heading, subtitle);
-    appView.appendChild(section);
+  if (typeof action === "function") {
+    button.addEventListener("click", action);
   }
 
-  section.classList.add("student-dashboard");
-
-  return section;
+  return button;
 }
 
-function preparePage(page, title, description = "") {
-  const section = getPageContainer(page, title, description);
+function makeField(labelText, name, type = "text", options = {}) {
+  const wrapper = createElement(
+    "div",
+    "student-form-field"
+  );
 
-  if (!section.dataset.studentPrepared) {
-    section.replaceChildren();
-    section.dataset.studentPrepared = "true";
+  const label = createElement("label", "", labelText);
+  label.htmlFor = `student-${name}`;
 
-    const heading = createElement("h1", "student-heading", title);
-    const subtitle = createElement("p", "student-subtitle", description);
+  let field;
 
-    section.append(heading, subtitle);
+  if (type === "textarea") {
+    field = document.createElement("textarea");
+    field.rows = options.rows || 3;
+  } else if (type === "select") {
+    field = document.createElement("select");
+
+    for (const option of options.options || []) {
+      const item = document.createElement("option");
+      item.value = option.value;
+      item.textContent = option.label;
+
+      field.appendChild(item);
+    }
+  } else {
+    field = document.createElement("input");
+    field.type = type;
   }
 
-  return section;
+  field.id = `student-${name}`;
+  field.name = name;
+  field.required = Boolean(options.required);
+
+  if (options.min !== undefined) {
+    field.min = options.min;
+  }
+
+  if (options.max !== undefined) {
+    field.max = options.max;
+  }
+
+  if (options.maxLength !== undefined) {
+    field.maxLength = options.maxLength;
+  }
+
+  if (options.placeholder) {
+    field.placeholder = options.placeholder;
+  }
+
+  if (options.accept) {
+    field.accept = options.accept;
+  }
+
+  wrapper.append(label, field);
+
+  return { wrapper, field };
 }
 
 function makeSection(title, description = "") {
-  const section = createElement("section", "student-section");
-  const heading = createElement("div", "student-section-heading");
+  const section = createElement(
+    "section",
+    "student-section"
+  );
+
+  const heading = createElement(
+    "div",
+    "student-section-heading"
+  );
+
   const group = document.createElement("div");
 
-  group.appendChild(createElement("h2", "", title));
+  group.appendChild(
+    createElement("h2", "", title)
+  );
 
   if (description) {
-    group.appendChild(createElement("p", "", description));
+    group.appendChild(
+      createElement("p", "", description)
+    );
   }
 
   heading.appendChild(group);
@@ -755,385 +891,543 @@ function makeSection(title, description = "") {
   return { section, heading };
 }
 
-// ============================================================
-// STUDENT DASHBOARD
-// ============================================================
+function pageContainer(page, title, description = "") {
+  let section = $(`[data-page="${page}"]`);
 
-function renderStat(label, value, caption) {
-  const card = createElement("article", "student-stat-card");
+  if (!section) {
+    const parent =
+      $("#appView") ||
+      $("#pageContent") ||
+      $("#mainContent") ||
+      $("#dashboardView") ||
+      $("main");
 
-  card.append(
-    createElement("p", "student-stat-label", label),
-    createElement("div", "student-stat-value", String(value)),
-    createElement("div", "student-stat-caption", caption)
+    if (!parent) {
+      throw new Error(
+        "The application content container was not found."
+      );
+    }
+
+    section = createElement(
+      "section",
+      "student-dashboard"
+    );
+
+    section.dataset.page = page;
+    section.hidden = true;
+
+    parent.appendChild(section);
+  }
+
+  section.classList.add("student-dashboard");
+
+  section.replaceChildren();
+
+  section.append(
+    createElement("h1", "student-heading", title),
+    createElement("p", "student-subtitle", description)
   );
 
-  return card;
+  return section;
 }
 
+function renderEmpty(container, message) {
+  container.replaceChildren(
+    createElement("div", "student-empty", message)
+  );
+}
+
+function createListItem(title, description, metadata = "") {
+  const item = createElement(
+    "article",
+    "student-list-item"
+  );
+
+  const content = document.createElement("div");
+
+  content.append(
+    createElement("h3", "", title),
+    createElement("p", "", description)
+  );
+
+  item.appendChild(content);
+
+  if (metadata) {
+    item.appendChild(
+      createElement("span", "student-badge", metadata)
+    );
+  }
+
+  return item;
+}
+
+// ============================================================
+// STUDY STATISTICS
+// ============================================================
+
+function getStatistics() {
+  const totalMinutes = state.records.reduce(
+    (total, record) =>
+      total + safeNumber(record.minutes, 0, 1440),
+    0
+  );
+
+  const today = state.activeDate;
+
+  const todayMinutes = state.records
+    .filter(record => {
+      const date = String(
+        record.date ||
+        record.studyDate ||
+        ""
+      ).slice(0, 10);
+
+      return date === today;
+    })
+    .reduce(
+      (total, record) =>
+        total + safeNumber(record.minutes, 0, 1440),
+      0
+    );
+
+  const subjects = new Set(
+    state.records
+      .map(record => String(record.subject || "").trim())
+      .filter(Boolean)
+  );
+
+  const completedSessions = state.records.length;
+
+  return {
+    totalMinutes,
+    todayMinutes,
+    subjects: subjects.size,
+    completedSessions
+  };
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+
 function renderDashboard() {
-  const section = preparePage(
+  const section = pageContainer(
     "dashboard",
-    `Welcome back, ${currentUserName()}`,
+    `Welcome back, ${userName()}`,
     "Your personal space to practise, improve, and track your mathematics journey."
   );
 
-  const stats = createElement("div", "student-stats");
-
-  const totalQuestions = studentState.records.reduce(
-    (sum, record) => sum + safeNumber(record.questions),
-    0
+  const welcome = createElement(
+    "section",
+    "student-welcome"
   );
 
-  const totalMinutes = studentState.records.reduce(
-    (sum, record) => sum + safeNumber(record.duration),
-    0
+  welcome.append(
+    createElement("p", "student-eyebrow", "Your learning overview"),
+    createElement("h2", "student-heading", "Make today count"),
+    createElement(
+      "p",
+      "student-subtitle",
+      "Record your study sessions, review your progress, and stay connected with your class."
+    )
   );
 
-  const verified = studentState.records.filter(
-    record => record.status === "verified"
-  ).length;
+  const stats = getStatistics();
 
-  const activeDays = new Set(
-    studentState.records.map(record => record.date).filter(Boolean)
-  ).size;
-
-  stats.append(
-    renderStat("Questions practised", totalQuestions, "Across recorded sessions"),
-    renderStat("Study time", formatDuration(totalMinutes), "Total recorded time"),
-    renderStat("Verified sessions", verified, "Approved by your teacher"),
-    renderStat("Practice days", activeDays, "Days with recorded activity")
+  const statGrid = createElement(
+    "div",
+    "student-stats"
   );
 
-  const quick = makeSection(
-    "Quick actions",
-    "Pick up where you left off."
-  );
+  const statItems = [
+    [
+      "Study time",
+      formatDuration(stats.totalMinutes),
+      "All recorded sessions"
+    ],
+    [
+      "Today's study",
+      formatDuration(stats.todayMinutes),
+      "Time recorded today"
+    ],
+    [
+      "Subjects",
+      stats.subjects,
+      "Subjects studied"
+    ],
+    [
+      "Sessions",
+      stats.completedSessions,
+      "Recorded sessions"
+    ]
+  ];
 
-  const actions = createElement("div", "student-form-actions");
+  for (const [label, value, caption] of statItems) {
+    const card = createElement(
+      "article",
+      "student-stat-card"
+    );
 
-  actions.append(
-    makeButton("Log today's practice", () => studentState.showPage?.("tracker")),
-    makeButton("View study history", () => studentState.showPage?.("history"), "secondary"),
-    makeButton("Ask a doubt", () => studentState.showPage?.("doubts"), "secondary")
-  );
+    card.append(
+      createElement("p", "student-stat-label", label),
+      createElement("div", "student-stat-value", value),
+      createElement("div", "student-stat-caption", caption)
+    );
 
-  quick.section.appendChild(actions);
-
-  const recent = makeSection(
-    "Recent practice",
-    "Your latest recorded math sessions."
-  );
-
-  const list = createElement("div", "student-list");
-
-  const records = [...studentState.records]
-    .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt))
-    .slice(0, 5);
-
-  if (!records.length) {
-    list.appendChild(createEmptyState({
-      icon: "∑",
-      title: "Your journey starts here",
-      description: "Log your first math practice session to start tracking your progress.",
-      actionLabel: "Log practice",
-      onAction: () => studentState.showPage?.("tracker")
-    }));
-  } else {
-    records.forEach(record => list.appendChild(renderLogItem(record)));
+    statGrid.appendChild(card);
   }
 
-  recent.section.appendChild(list);
+  const quickActions = makeSection(
+    "Quick actions",
+    "Continue learning with these shortcuts."
+  );
+
+  const actionGrid = createElement(
+    "div",
+    "student-form-actions"
+  );
+
+  actionGrid.append(
+    makeButton(
+      "Log study session",
+      () => navigate("tracker")
+    ),
+    makeButton(
+      "View study history",
+      () => navigate("history"),
+      "secondary"
+    ),
+    makeButton(
+      "Ask a doubt",
+      () => navigate("doubts"),
+      "secondary"
+    )
+  );
+
+  quickActions.section.appendChild(actionGrid);
+
+  const recent = makeSection(
+    "Recent study sessions",
+    "Your latest recorded activities."
+  );
+
+  const recentList = createElement(
+    "div",
+    "student-list"
+  );
+
+  if (state.records.length === 0) {
+    renderEmpty(
+      recentList,
+      "You have not recorded a study session yet. Start with your first session!"
+    );
+  } else {
+    state.records
+      .slice(0, 5)
+      .forEach(record => {
+        recentList.appendChild(
+          createListItem(
+            record.subject || "Study session",
+            `${record.topic || "No topic specified"} · ${
+              formatDuration(
+                safeNumber(record.minutes)
+              )
+            }`,
+            record.date || ""
+          )
+        );
+      });
+  }
+
+  recent.section.appendChild(recentList);
 
   const announcements = makeSection(
     "Latest announcements",
-    "Important updates from your teacher."
+    "Updates from your classroom."
   );
 
-  const announcementList = createElement("div", "student-list");
+  const announcementList = createElement(
+    "div",
+    "student-list"
+  );
 
-  const latest = [...studentState.announcements]
-    .filter(item => item.published !== false)
-    .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt))
-    .slice(0, 3);
-
-  if (!latest.length) {
-    announcementList.appendChild(createEmptyState({
-      icon: "◷",
-      title: "No announcements yet",
-      description: "New classroom updates will appear here."
-    }));
+  if (state.announcements.length === 0) {
+    renderEmpty(
+      announcementList,
+      "There are no announcements to display."
+    );
   } else {
-    latest.forEach(item => {
-      announcementList.appendChild(renderAnnouncement(item));
-    });
+    state.announcements
+      .slice(0, 3)
+      .forEach(item => {
+        announcementList.appendChild(
+          createListItem(
+            item.title || "Announcement",
+            item.message || item.content || "",
+            item.category || "Update"
+          )
+        );
+      });
   }
 
   announcements.section.appendChild(announcementList);
 
-  section.replaceChildren(
-    createWelcomeHeader(),
-    stats,
-    quick.section,
+  section.append(
+    welcome,
+    statGrid,
+    quickActions.section,
     recent.section,
     announcements.section
   );
 }
 
-function createWelcomeHeader() {
-  const header = createElement("header", "student-welcome");
-  const left = document.createElement("div");
-
-  left.append(
-    createElement("div", "student-eyebrow", "STUDENT DASHBOARD"),
-    createElement("h1", "student-heading", `Welcome back, ${currentUserName()}`),
-    createElement("p", "student-subtitle", "Small steps every day lead to stronger mathematics.")
-  );
-
-  const button = makeButton(
-    "Log practice",
-    () => studentState.showPage?.("tracker")
-  );
-
-  header.append(left, button);
-
-  return header;
-}
-
 // ============================================================
-// PRACTICE LOGS
+// STUDY TRACKER
 // ============================================================
-
-function renderLogItem(record) {
-  const item = createElement("article", "student-list-item");
-  const details = document.createElement("div");
-
-  details.append(
-    createElement("h3", "", record.topic || "Math practice"),
-    createElement(
-      "p",
-      "",
-      `${safeNumber(record.questions)} questions · ${formatDuration(record.duration)} · ${formatDate(record.date)}`
-    )
-  );
-
-  const right = document.createElement("div");
-  right.appendChild(createStatusBadge(record.status || "submitted"));
-
-  item.append(details, right);
-
-  return item;
-}
 
 function renderTracker() {
-  const section = preparePage(
+  const section = pageContainer(
     "tracker",
-    "Daily Math Tracker",
-    "Record your practice and attach optional proof of your work."
+    "Study Tracker",
+    "Record your daily study sessions and keep track of your effort."
   );
 
   const formSection = makeSection(
-    "Log a practice session",
-    "Enter accurate details about the work you completed."
+    "Record a study session",
+    "Enter the details of the session you completed."
   );
 
   const form = document.createElement("form");
+  form.id = "studentStudyForm";
   form.noValidate = true;
 
-  const grid = createElement("div", "student-form-grid");
+  const grid = createElement(
+    "div",
+    "student-form-grid"
+  );
 
-  const date = makeField("Practice date", "date", "date", {
-    required: true,
-    max: new Date().toISOString().slice(0, 10)
-  });
+  const date = makeField(
+    "Study date",
+    "date",
+    "date",
+    {
+      required: true
+    }
+  );
 
-  date.field.value = studentState.activeDate;
+  date.field.value = state.activeDate;
+  date.field.max = new Date().toISOString().slice(0, 10);
 
-  const topic = makeField("Math topic", "topic", "text", {
-    required: true,
-    maxLength: 120,
-    placeholder: "e.g. Quadratic Equations"
-  });
+  const subject = makeField(
+    "Subject",
+    "subject",
+    "select",
+    {
+      required: true,
+      options: [
+        { value: "", label: "Choose a subject" },
+        { value: "Mathematics", label: "Mathematics" },
+        { value: "Science", label: "Science" },
+        { value: "English", label: "English" },
+        { value: "Social Science", label: "Social Science" },
+        { value: "Hindi", label: "Hindi" },
+        { value: "Other", label: "Other" }
+      ]
+    }
+  );
 
-  const questions = makeField("Questions solved", "questions", "number", {
-    required: true,
-    min: 1,
-    max: 10000
-  });
+  const minutes = makeField(
+    "Study duration (minutes)",
+    "minutes",
+    "number",
+    {
+      required: true,
+      min: 1,
+      max: 1440,
+      placeholder: "e.g. 45"
+    }
+  );
 
-  questions.field.placeholder = "e.g. 25";
+  const topic = makeField(
+    "Topic studied",
+    "topic",
+    "text",
+    {
+      required: true,
+      maxLength: LIMITS.topicLength,
+      placeholder: "e.g. Quadratic equations"
+    }
+  );
 
-  const duration = makeField("Study duration (minutes)", "duration", "number", {
-    required: true,
-    min: 1,
-    max: 1440
-  });
-
-  duration.field.placeholder = "e.g. 45";
-
-  const notes = makeField("What did you learn? (optional)", "notes", "textarea", {
-    maxLength: MAX_REMARKS_LENGTH,
-    placeholder: "Briefly describe your practice session."
-  });
+  const notes = makeField(
+    "Notes (optional)",
+    "notes",
+    "textarea",
+    {
+      maxLength: LIMITS.remarksLength,
+      placeholder: "What did you practise or learn?"
+    }
+  );
 
   notes.wrapper.classList.add("student-form-full");
 
-  const proof = makeField("Proof image (optional, max 5 MB)", "proof", "file", {
-    accept: "image/jpeg,image/png,image/webp"
-  });
-
-  proof.wrapper.appendChild(
-    createElement(
-      "p",
-      "student-muted",
-      "Upload a clear image of your written work. Images are optional."
-    )
-  );
-
   grid.append(
     date.wrapper,
+    subject.wrapper,
+    minutes.wrapper,
     topic.wrapper,
-    questions.wrapper,
-    duration.wrapper,
-    notes.wrapper,
-    proof.wrapper
+    notes.wrapper
   );
 
-  const actions = createElement("div", "student-form-actions");
+  const actions = createElement(
+    "div",
+    "student-form-actions"
+  );
 
-  const submit = makeButton("Submit practice log", null);
+  const submit = document.createElement("button");
   submit.type = "submit";
+  submit.className = "mc-button mc-button-primary";
+  submit.textContent = "Save study session";
 
   actions.appendChild(submit);
   form.append(grid, actions);
-
-  form.addEventListener("submit", async event => {
-    event.preventDefault();
-
-    if (studentState.submitting) return;
-
-    if (!validateRequired([
-      { field: date.field, label: "Practice date" },
-      { field: topic.field, label: "Math topic" },
-      { field: questions.field, label: "Questions solved" },
-      { field: duration.field, label: "Study duration" }
-    ])) {
-      return;
-    }
-
-    const questionCount = Number(questions.field.value);
-    const durationMinutes = Number(duration.field.value);
-    const today = new Date().toISOString().slice(0, 10);
-
-    if (!Number.isInteger(questionCount) || questionCount < 1 || questionCount > 10000) {
-      notify("Questions must be a whole number between 1 and 10,000.", "warning");
-      questions.field.focus();
-      return;
-    }
-
-    if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 1440) {
-      notify("Study duration must be between 1 and 1,440 minutes.", "warning");
-      duration.field.focus();
-      return;
-    }
-
-    if (date.field.value > today) {
-      notify("Practice date cannot be in the future.", "warning");
-      date.field.focus();
-      return;
-    }
-
-    if (notes.field.value.length > MAX_REMARKS_LENGTH) {
-      notify(`Notes must be ${MAX_REMARKS_LENGTH} characters or fewer.`, "warning");
-      return;
-    }
-
-    const file = proof.field.files?.[0];
-
-    if (file) {
-      const validation = validateFileSize(
-        file,
-        MAX_PROOF_SIZE_MB,
-        ["image/jpeg", "image/png", "image/webp"]
-      );
-
-      if (!validation.valid) {
-        notify(validation.message, "warning");
-        return;
-      }
-
-      if (!studentState.storage) {
-        notify("Firebase Storage is unavailable. Please try again later.", "error");
-        return;
-      }
-    }
-
-    studentState.submitting = true;
-    submit.disabled = true;
-    submit.textContent = "Saving...";
-
-    try {
-      const recordRef = push(ref(studentState.db, PATHS.logs));
-      const recordId = recordRef.key;
-
-      let proofURL = "";
-      let proofPath = "";
-
-      if (file) {
-        proofPath =
-          `math-proof/${uid()}/${recordId}/` +
-          `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-
-        const uploaded = await uploadBytes(
-          storageRef(studentState.storage, proofPath),
-          file,
-          { contentType: file.type }
-        );
-
-        proofURL = await getDownloadURL(uploaded.ref);
-      }
-
-      const record = {
-        id: recordId,
-        uid: uid(),
-        studentName: currentUserName(),
-        studentEmail: studentState.user.email || "",
-        date: date.field.value,
-        topic: topic.field.value.trim(),
-        questions: questionCount,
-        duration: durationMinutes,
-        notes: notes.field.value.trim(),
-        proofURL,
-        proofPath,
-        status: "submitted",
-        createdAt: now(),
-        updatedAt: now()
-      };
-
-      await set(recordRef, record);
-
-      form.reset();
-      date.field.value = today;
-      studentState.activeDate = today;
-
-      notify(
-        "Your practice log has been submitted for teacher review.",
-        "success"
-      );
-
-      studentState.showPage?.("history");
-
-    } catch (error) {
-      showError(error, "Could not save practice log");
-    } finally {
-      studentState.submitting = false;
-      submit.disabled = false;
-      submit.textContent = "Submit practice log";
-    }
-  });
-
   formSection.section.appendChild(form);
-  section.replaceChildren(formSection.section);
+
+  const recentSection = makeSection(
+    "Recent sessions",
+    "The most recent entries from your study tracker."
+  );
+
+  const list = createElement(
+    "div",
+    "student-list"
+  );
+
+  const recentRecords = state.records.slice(0, 8);
+
+  if (recentRecords.length === 0) {
+    renderEmpty(list, "Your study sessions will appear here.");
+  } else {
+    for (const record of recentRecords) {
+      list.appendChild(
+        createListItem(
+          record.subject || "Study session",
+          `${record.topic || "No topic"} · ${formatDuration(
+            safeNumber(record.minutes)
+          )}`,
+          record.date || ""
+        )
+      );
+    }
+  }
+
+  recentSection.section.appendChild(list);
+
+  section.append(
+    formSection.section,
+    recentSection.section
+  );
+}
+
+async function handleStudySubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+
+  if (
+    !(form instanceof HTMLFormElement) ||
+    form.id !== "studentStudyForm"
+  ) {
+    return;
+  }
+
+  if (state.submitting) {
+    return;
+  }
+
+  const formData = new FormData(form);
+
+  const date = String(formData.get("date") || "");
+  const subject = String(formData.get("subject") || "").trim();
+  const minutes = safeNumber(formData.get("minutes"), 0, 1440);
+  const topic = String(formData.get("topic") || "").trim();
+  const notes = String(formData.get("notes") || "").trim();
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (!date || date > today) {
+    notify("Choose a valid study date.", "error");
+    return;
+  }
+
+  if (!subject) {
+    notify("Choose a subject.", "error");
+    return;
+  }
+
+  if (minutes < 1 || minutes > 1440) {
+    notify("Study duration must be between 1 and 1440 minutes.", "error");
+    return;
+  }
+
+  if (!topic || topic.length > LIMITS.topicLength) {
+    notify(
+      `The topic is required and must be no longer than ${LIMITS.topicLength} characters.`,
+      "error"
+    );
+    return;
+  }
+
+  if (notes.length > LIMITS.remarksLength) {
+    notify("Your notes are too long.", "error");
+    return;
+  }
+
+  state.submitting = true;
+
+  const button = $('button[type="submit"]', form);
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Saving...";
+  }
+
+  try {
+    const logRef = push(
+      ref(state.db, PATHS.logs)
+    );
+
+    const record = {
+      uid: uid(),
+      subject,
+      date,
+      minutes,
+      topic,
+      notes,
+      createdAt: currentTime(),
+      updatedAt: currentTime()
+    };
+
+    await withTimeout(
+      set(logRef, record)
+    );
+
+    state.activeDate = date;
+
+    form.reset();
+
+    notify("Study session saved successfully.", "success");
+
+  } catch (error) {
+    reportError(error, "Could not save study session");
+  } finally {
+    state.submitting = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Save study session";
+    }
+  }
 }
 
 // ============================================================
@@ -1141,136 +1435,195 @@ function renderTracker() {
 // ============================================================
 
 function renderHistory() {
-  const section = preparePage(
+  const section = pageContainer(
     "history",
     "Study History",
-    "Review your practice sessions and teacher verification status."
+    "Review your recorded sessions and see how your study habits develop."
   );
 
-  const content = makeSection(
-    "All practice sessions",
-    `${studentState.records.length} recorded sessions`
+  const stats = getStatistics();
+
+  const overview = makeSection(
+    "Your progress",
+    "Summary of the sessions currently available."
   );
 
-  const list = createElement("div", "student-list");
+  const grid = createElement(
+    "div",
+    "student-stats"
+  );
 
-  const records = [...studentState.records]
-    .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt));
+  const values = [
+    ["Total sessions", stats.completedSessions],
+    ["Total study time", formatDuration(stats.totalMinutes)],
+    ["Today's study", formatDuration(stats.todayMinutes)],
+    ["Subjects studied", stats.subjects]
+  ];
 
-  if (!records.length) {
-    list.appendChild(createEmptyState({
-      icon: "◷",
-      title: "No study history yet",
-      description: "Your practice sessions will appear here after you submit a log.",
-      actionLabel: "Log practice",
-      onAction: () => studentState.showPage?.("tracker")
-    }));
+  for (const [label, value] of values) {
+    const card = createElement(
+      "article",
+      "student-stat-card"
+    );
+
+    card.append(
+      createElement("p", "student-stat-label", label),
+      createElement("div", "student-stat-value", value)
+    );
+
+    grid.appendChild(card);
+  }
+
+  overview.section.appendChild(grid);
+
+  const sessions = makeSection(
+    "All study sessions",
+    "Your latest recorded sessions appear first."
+  );
+
+  const list = createElement(
+    "div",
+    "student-list"
+  );
+
+  if (state.records.length === 0) {
+    renderEmpty(
+      list,
+      "No study history is available yet."
+    );
   } else {
-    records.forEach(record => {
-      const item = renderLogItem(record);
-      const details = item.firstElementChild;
+    for (const record of state.records) {
+      const item = createListItem(
+        record.subject || "Study session",
+        `${record.topic || "No topic"} · ${
+          formatDuration(safeNumber(record.minutes))
+        }${record.notes ? ` · ${record.notes}` : ""}`,
+        record.date || ""
+      );
 
-      if (record.notes) {
-        details.appendChild(
-          createElement("p", "", `Notes: ${record.notes}`)
-        );
-      }
-
-      if (record.proofURL) {
-        const proofLink = document.createElement("a");
-
-        proofLink.href = record.proofURL;
-        proofLink.target = "_blank";
-        proofLink.rel = "noopener noreferrer";
-        proofLink.textContent = "View proof image";
-        proofLink.style.display = "inline-block";
-        proofLink.style.marginTop = "8px";
-
-        details.appendChild(proofLink);
-      }
-
-      if (record.teacherFeedback) {
-        details.appendChild(
-          createElement("p", "", `Teacher feedback: ${record.teacherFeedback}`)
+      if (record.uid === uid()) {
+        item.appendChild(
+          makeButton(
+            "Delete",
+            () => deleteStudyRecord(record.id),
+            "danger"
+          )
         );
       }
 
       list.appendChild(item);
-    });
+    }
   }
 
-  content.section.appendChild(list);
-  section.replaceChildren(content.section);
+  sessions.section.appendChild(list);
+
+  section.append(
+    overview.section,
+    sessions.section
+  );
+}
+
+async function deleteStudyRecord(id) {
+  if (!id) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Delete this study session? This action cannot be undone."
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const record = state.records.find(
+    item => item.id === id
+  );
+
+  if (!record || record.uid !== uid()) {
+    notify(
+      "You cannot delete this study session.",
+      "error"
+    );
+
+    return;
+  }
+
+  try {
+    await withTimeout(
+      remove(ref(state.db, `${PATHS.logs}/${id}`))
+    );
+
+    notify("Study session deleted.", "success");
+
+  } catch (error) {
+    reportError(error, "Could not delete study session");
+  }
 }
 
 // ============================================================
 // ANNOUNCEMENTS
 // ============================================================
 
-function renderAnnouncement(item) {
-  const card = createElement("article", "student-announcement");
-
-  const heading = createElement(
-    "h3",
-    "",
-    item.title || "Class announcement"
-  );
-
-  const meta = createElement("div", "student-announcement-meta");
-
-  meta.append(
-    createElement("span", "", item.authorName || "Teacher"),
-    createElement("span", "", formatDateTime(item.createdAt))
-  );
-
-  card.append(heading, meta);
-
-  if (item.body || item.message) {
-    card.appendChild(
-      createElement("p", "", item.body || item.message)
-    );
-  }
-
-  if (item.attachmentURL) {
-    const link = document.createElement("a");
-
-    link.href = item.attachmentURL;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = item.attachmentName || "Open attachment";
-
-    card.appendChild(link);
-  }
-
-  return card;
-}
-
 function renderAnnouncements() {
-  const section = preparePage(
+  const section = pageContainer(
     "announcements",
-    "Notice Board",
-    "Stay up to date with class announcements and learning resources."
+    "Announcements",
+    "Stay informed about updates from your classroom."
   );
 
-  const list = createElement("div", "student-list");
+  const listSection = makeSection(
+    "Classroom updates",
+    "Published announcements are shown below."
+  );
 
-  const announcements = [...studentState.announcements]
-    .filter(item => item.published !== false)
-    .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt));
+  const list = createElement(
+    "div",
+    "student-list"
+  );
 
-  if (!announcements.length) {
-    list.appendChild(createEmptyState({
-      icon: "◷",
-      title: "You're all caught up",
-      description: "There are no published announcements at the moment."
-    }));
+  if (state.announcements.length === 0) {
+    renderEmpty(
+      list,
+      "There are no published announcements yet."
+    );
   } else {
-    announcements.forEach(item => {
-      list.appendChild(renderAnnouncement(item));
-    });
+    for (const item of state.announcements) {
+      const card = createElement(
+        "article",
+        "student-announcement"
+      );
+
+      const title = createElement(
+        "h3",
+        "",
+        item.title || "Classroom announcement"
+      );
+
+      const body = createElement(
+        "p",
+        "",
+        item.message || item.content || ""
+      );
+
+      const metadata = createElement(
+        "p",
+        "student-muted",
+        [
+          item.category || "Announcement",
+          item.createdAt
+            ? formatDateTime(item.createdAt)
+            : ""
+        ].filter(Boolean).join(" · ")
+      );
+
+      card.append(title, body, metadata);
+      list.appendChild(card);
+    }
   }
 
-  section.replaceChildren(list);
+  listSection.section.appendChild(list);
+  section.appendChild(listSection.section);
 }
 
 // ============================================================
@@ -1285,15 +1638,24 @@ function renderChatMessage(message) {
     `student-chat-message${mine ? " mine" : ""}`
   );
 
-  const meta = createElement("div", "student-chat-meta");
+  const meta = createElement(
+    "div",
+    "student-chat-meta"
+  );
 
   meta.append(
     createElement(
       "span",
       "",
-      mine ? "You" : (message.displayName || "Class member")
+      mine ? "You" : message.name || "Class member"
     ),
-    createElement("span", "", formatDateTime(message.createdAt))
+    createElement(
+      "span",
+      "",
+      message.createdAt
+        ? formatDateTime(message.createdAt)
+        : ""
+    )
   );
 
   const body = createElement(
@@ -1308,404 +1670,598 @@ function renderChatMessage(message) {
 }
 
 function renderChat() {
-  const section = preparePage(
+  const section = pageContainer(
     "chat",
     "Class Chat",
-    "Discuss mathematics respectfully with your classmates."
+    "Communicate with your class using the shared classroom chat."
   );
 
-  const messagesBox = createElement("div", "student-chat-messages");
-  messagesBox.setAttribute("aria-live", "polite");
+  const chatSection = makeSection(
+    "Classroom conversation",
+    "Keep messages respectful and related to learning."
+  );
 
-  const messages = [...studentState.chatMessages]
-    .filter(message => !message.deleted)
-    .sort((a, b) => safeNumber(a.createdAt) - safeNumber(b.createdAt))
-    .slice(-100);
+  const chat = createElement(
+    "div",
+    "student-chat"
+  );
 
-  if (!messages.length) {
-    messagesBox.appendChild(createEmptyState({
-      icon: "✦",
-      title: "Start the conversation",
-      description: "Ask a question or share a useful study tip."
-    }));
+  const messages = createElement(
+    "div",
+    "student-chat-messages"
+  );
+
+  messages.id = "studentChatMessages";
+  messages.setAttribute("aria-live", "polite");
+
+  if (state.chatMessages.length === 0) {
+    renderEmpty(
+      messages,
+      "No messages yet. Start a conversation with your class."
+    );
   } else {
-    messages.forEach(message => {
-      messagesBox.appendChild(renderChatMessage(message));
+    state.chatMessages.forEach(message => {
+      messages.appendChild(
+        renderChatMessage(message)
+      );
     });
   }
 
   const form = document.createElement("form");
+  form.id = "studentChatForm";
   form.className = "student-chat-compose";
 
   const input = document.createElement("textarea");
+
   input.name = "message";
-  input.maxLength = MAX_CHAT_LENGTH;
+  input.maxLength = LIMITS.chatLength;
   input.required = true;
   input.placeholder = "Write a message...";
   input.setAttribute("aria-label", "Chat message");
 
-  const submit = makeButton("Send", null);
-  submit.type = "submit";
+  const send = document.createElement("button");
 
-  form.append(input, submit);
+  send.type = "submit";
+  send.className = "mc-button mc-button-primary";
+  send.textContent = "Send";
 
-  form.addEventListener("submit", async event => {
-    event.preventDefault();
+  form.append(input, send);
+  chat.append(messages, form);
 
-    const message = input.value.trim();
+  chatSection.section.appendChild(chat);
+  section.appendChild(chatSection.section);
 
-    if (!message) {
-      notify("Write a message first.", "warning");
-      return;
-    }
-
-    if (message.length > MAX_CHAT_LENGTH) {
-      notify(`Messages cannot exceed ${MAX_CHAT_LENGTH} characters.`, "warning");
-      return;
-    }
-
-    submit.disabled = true;
-
-    try {
-      const messageRef = push(ref(studentState.db, PATHS.chat));
-
-      await set(messageRef, {
-        id: messageRef.key,
-        uid: uid(),
-        displayName: currentUserName(),
-        message,
-        createdAt: now(),
-        deleted: false
-      });
-
-      input.value = "";
-      notify("Message sent.", "success");
-
-    } catch (error) {
-      showError(error, "Could not send message");
-    } finally {
-      submit.disabled = false;
+  // Scroll only after the chat UI is inserted into the document.
+  requestAnimationFrame(() => {
+    if (messages.isConnected) {
+      messages.scrollTop = messages.scrollHeight;
     }
   });
-
-  const chat = createElement("div", "student-chat");
-
-  chat.append(messagesBox, form);
-  section.replaceChildren(chat);
-
-  messagesBox.scrollTop = messagesBox.scrollHeight;
 }
 
-// ============================================================
-// PRIVATE DOUBTS
-// ============================================================
+async function handleChatSubmit(event) {
+  event.preventDefault();
 
-function renderDoubtItem(doubt) {
-  const item = createElement("article", "student-list-item");
-  const details = document.createElement("div");
+  const form = event.target;
 
-  details.append(
-    createElement("h3", "", doubt.subject || "Math doubt"),
-    createElement("p", "", doubt.question || ""),
-    createElement("p", "", `Submitted ${formatDateTime(doubt.createdAt)}`)
-  );
-
-  if (doubt.reply) {
-    const reply = createElement("div", "", "");
-
-    reply.style.marginTop = "12px";
-    reply.style.padding = "12px";
-    reply.style.background = "#F1F5F9";
-    reply.style.borderRadius = "8px";
-
-    reply.append(
-      createElement("strong", "", "Teacher's reply"),
-      createElement("p", "", doubt.reply)
-    );
-
-    details.appendChild(reply);
+  if (
+    !(form instanceof HTMLFormElement) ||
+    form.id !== "studentChatForm"
+  ) {
+    return;
   }
 
-  const right = document.createElement("div");
-  right.appendChild(createStatusBadge(doubt.status || "submitted"));
+  if (state.submitting) {
+    return;
+  }
 
-  item.append(details, right);
+  const input = $('textarea[name="message"]', form);
+  const message = String(input?.value || "").trim();
 
-  return item;
+  if (!message) {
+    notify("Write a message before sending.", "error");
+    return;
+  }
+
+  if (message.length > LIMITS.chatLength) {
+    notify("Your message is too long.", "error");
+    return;
+  }
+
+  state.submitting = true;
+
+  const button = $('button[type="submit"]', form);
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+
+  try {
+    const messageRef = push(
+      ref(state.db, PATHS.chat)
+    );
+
+    await withTimeout(
+      set(messageRef, {
+        uid: uid(),
+        name: userName(),
+        message,
+        createdAt: currentTime(),
+        deleted: false
+      })
+    );
+
+    input.value = "";
+
+  } catch (error) {
+    reportError(error, "Could not send your message");
+  } finally {
+    state.submitting = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send";
+    }
+  }
 }
 
+// ============================================================
+// DOUBTS
+// ============================================================
+
 function renderDoubts() {
-  const section = preparePage(
+  const section = pageContainer(
     "doubts",
     "Ask a Doubt",
-    "Submit a question privately to your teacher and track its response."
+    "Submit a question and review the status of your previous questions."
   );
 
   const formSection = makeSection(
-    "Submit a new question",
-    "Only authorized teachers and your account should have access to this conversation."
+    "Submit a question",
+    "Describe the topic you need help understanding."
   );
 
   const form = document.createElement("form");
-  const grid = createElement("div", "student-form-grid");
+  form.id = "studentDoubtForm";
+  form.noValidate = true;
 
-  const subject = makeField("Subject", "doubtSubject", "text", {
-    required: true,
-    maxLength: 120,
-    placeholder: "e.g. Understanding trigonometry"
-  });
+  const grid = createElement(
+    "div",
+    "student-form-grid"
+  );
 
-  const category = makeField("Topic", "doubtCategory", "select", {
-    options: [
-      { value: "Algebra", label: "Algebra" },
-      { value: "Geometry", label: "Geometry" },
-      { value: "Trigonometry", label: "Trigonometry" },
-      { value: "Statistics", label: "Statistics" },
-      { value: "Arithmetic", label: "Arithmetic" },
-      { value: "Other", label: "Other" }
-    ]
-  });
+  const subject = makeField(
+    "Subject",
+    "doubtSubject",
+    "select",
+    {
+      required: true,
+      options: [
+        { value: "", label: "Choose a subject" },
+        { value: "Mathematics", label: "Mathematics" },
+        { value: "Science", label: "Science" },
+        { value: "English", label: "English" },
+        { value: "Social Science", label: "Social Science" },
+        { value: "Hindi", label: "Hindi" },
+        { value: "Other", label: "Other" }
+      ]
+    }
+  );
 
-  const question = makeField("Your question", "doubtQuestion", "textarea", {
-    required: true,
-    maxLength: MAX_DOUBT_LENGTH,
-    rows: 5,
-    placeholder: "Explain where you are stuck..."
-  });
+  const title = makeField(
+    "Question title",
+    "doubtTitle",
+    "text",
+    {
+      required: true,
+      maxLength: 150,
+      placeholder: "Briefly describe your question"
+    }
+  );
 
-  question.wrapper.classList.add("student-form-full");
+  const details = makeField(
+    "Question details",
+    "doubtDetails",
+    "textarea",
+    {
+      required: true,
+      maxLength: LIMITS.doubtLength,
+      placeholder: "Explain what you are finding difficult..."
+    }
+  );
 
-  grid.append(subject.wrapper, category.wrapper, question.wrapper);
+  details.wrapper.classList.add("student-form-full");
 
-  const actions = createElement("div", "student-form-actions");
-  const submit = makeButton("Submit doubt", null);
+  grid.append(
+    subject.wrapper,
+    title.wrapper,
+    details.wrapper
+  );
+
+  const actions = createElement(
+    "div",
+    "student-form-actions"
+  );
+
+  const submit = document.createElement("button");
 
   submit.type = "submit";
+  submit.className = "mc-button mc-button-primary";
+  submit.textContent = "Submit question";
+
   actions.appendChild(submit);
-
   form.append(grid, actions);
-
-  form.addEventListener("submit", async event => {
-    event.preventDefault();
-
-    if (!validateRequired([
-      { field: subject.field, label: "Subject" },
-      { field: question.field, label: "Question" }
-    ])) {
-      return;
-    }
-
-    const questionValue = question.field.value.trim();
-
-    if (questionValue.length > MAX_DOUBT_LENGTH) {
-      notify(`Your question must be ${MAX_DOUBT_LENGTH} characters or fewer.`, "warning");
-      return;
-    }
-
-    submit.disabled = true;
-    submit.textContent = "Submitting...";
-
-    try {
-      const doubtRef = push(ref(studentState.db, PATHS.doubts));
-
-      await set(doubtRef, {
-        id: doubtRef.key,
-        uid: uid(),
-        studentName: currentUserName(),
-        studentEmail: studentState.user.email || "",
-        subject: subject.field.value.trim(),
-        category: category.field.value,
-        question: questionValue,
-        status: "submitted",
-        reply: "",
-        createdAt: now(),
-        updatedAt: now()
-      });
-
-      form.reset();
-
-      notify(
-        "Your doubt has been sent privately to your teacher.",
-        "success"
-      );
-
-    } catch (error) {
-      showError(error, "Could not submit doubt");
-    } finally {
-      submit.disabled = false;
-      submit.textContent = "Submit doubt";
-    }
-  });
 
   formSection.section.appendChild(form);
 
-  const listSection = makeSection(
-    "Your submitted doubts",
-    "Only your own doubts are shown here."
+  const historySection = makeSection(
+    "My questions",
+    "Track your submitted questions and replies."
   );
 
-  const list = createElement("div", "student-list");
+  const list = createElement(
+    "div",
+    "student-list"
+  );
 
-  if (!studentState.doubts.length) {
-    list.appendChild(createEmptyState({
-      icon: "?",
-      title: "No questions submitted",
-      description: "Questions you send to your teacher will appear here."
-    }));
+  if (state.doubts.length === 0) {
+    renderEmpty(
+      list,
+      "You have not submitted any questions yet."
+    );
   } else {
-    [...studentState.doubts]
-      .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt))
-      .forEach(doubt => list.appendChild(renderDoubtItem(doubt)));
+    for (const doubt of state.doubts) {
+      const item = createElement(
+        "article",
+        "student-list-item"
+      );
+
+      const content = document.createElement("div");
+
+      content.append(
+        createElement(
+          "h3",
+          "",
+          doubt.title || "Question"
+        ),
+        createElement(
+          "p",
+          "",
+          `${doubt.subject || "General"} · ${
+            doubt.details || doubt.message || ""
+          }`
+        )
+      );
+
+      if (doubt.reply) {
+        content.appendChild(
+          createElement(
+            "p",
+            "",
+            `Reply: ${doubt.reply}`
+          )
+        );
+      }
+
+      item.append(
+        content,
+        createElement(
+          "span",
+          "student-badge",
+          doubt.status || "Submitted"
+        )
+      );
+
+      list.appendChild(item);
+    }
   }
 
-  listSection.section.appendChild(list);
+  historySection.section.appendChild(list);
 
-  section.replaceChildren(formSection.section, listSection.section);
+  section.append(
+    formSection.section,
+    historySection.section
+  );
+}
+
+async function handleDoubtSubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+
+  if (
+    !(form instanceof HTMLFormElement) ||
+    form.id !== "studentDoubtForm"
+  ) {
+    return;
+  }
+
+  if (state.submitting) {
+    return;
+  }
+
+  const formData = new FormData(form);
+
+  const subject = String(
+    formData.get("doubtSubject") || ""
+  ).trim();
+
+  const title = String(
+    formData.get("doubtTitle") || ""
+  ).trim();
+
+  const details = String(
+    formData.get("doubtDetails") || ""
+  ).trim();
+
+  if (!subject || !title || !details) {
+    notify("Complete all required fields.", "error");
+    return;
+  }
+
+  if (title.length > 150) {
+    notify("The question title is too long.", "error");
+    return;
+  }
+
+  if (details.length > LIMITS.doubtLength) {
+    notify("Your question is too long.", "error");
+    return;
+  }
+
+  state.submitting = true;
+
+  const button = $('button[type="submit"]', form);
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Submitting...";
+  }
+
+  try {
+    const doubtRef = push(
+      ref(state.db, PATHS.doubts)
+    );
+
+    await withTimeout(
+      set(doubtRef, {
+        uid: uid(),
+        name: userName(),
+        email: state.user?.email || "",
+        subject,
+        title,
+        details,
+        status: "Submitted",
+        reply: "",
+        createdAt: currentTime(),
+        updatedAt: currentTime()
+      })
+    );
+
+    form.reset();
+
+    notify(
+      "Your question has been submitted.",
+      "success"
+    );
+
+  } catch (error) {
+    reportError(error, "Could not submit your question");
+  } finally {
+    state.submitting = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Submit question";
+    }
+  }
 }
 
 // ============================================================
-// PROFILE SETTINGS
+// PROFILE
 // ============================================================
 
 function renderProfile() {
-  const section = preparePage(
+  const section = pageContainer(
     "profile",
-    "Profile Settings",
-    "Manage your account information."
+    "My Profile",
+    "Manage your personal account information."
   );
 
-  const profileSection = makeSection(
-    "Personal information",
-    "Update your display name."
+  const details = makeSection(
+    "Account information",
+    "Your email address is managed by Firebase Authentication."
   );
 
   const form = document.createElement("form");
-  const grid = createElement("div", "student-form-grid");
+  form.id = "studentProfileForm";
+  form.noValidate = true;
 
-  const name = makeField("Full name", "profileName", "text", {
-    required: true,
-    maxLength: 100
-  });
-
-  name.field.value = currentUserName();
-
-  const email = makeField("Email address", "profileEmail", "email");
-  email.field.value = studentState.user.email || "";
-  email.field.readOnly = true;
-
-  const role = makeField("Account role", "profileRole", "text");
-  role.field.value = "Student";
-  role.field.readOnly = true;
-
-  const joined = makeField("Account created", "profileCreated", "text");
-  joined.field.value = formatDate(
-    studentState.profile?.createdAt ||
-    studentState.user.metadata?.creationTime
+  const grid = createElement(
+    "div",
+    "student-form-grid"
   );
-  joined.field.readOnly = true;
 
-  grid.append(name.wrapper, email.wrapper, role.wrapper, joined.wrapper);
+  const name = makeField(
+    "Display name",
+    "profileName",
+    "text",
+    {
+      required: true,
+      maxLength: LIMITS.nameLength
+    }
+  );
 
-  const actions = createElement("div", "student-form-actions");
-  const save = makeButton("Save profile", null);
+  name.field.value = userName();
+
+  const email = makeField(
+    "Email address",
+    "profileEmail",
+    "email"
+  );
+
+  email.field.value = state.user?.email || "";
+  email.field.disabled = true;
+
+  const uidField = makeField(
+    "Account UID",
+    "profileUid",
+    "text"
+  );
+
+  uidField.field.value = uid();
+  uidField.field.readOnly = true;
+
+  grid.append(
+    name.wrapper,
+    email.wrapper,
+    uidField.wrapper
+  );
+
+  const actions = createElement(
+    "div",
+    "student-form-actions"
+  );
+
+  const save = document.createElement("button");
 
   save.type = "submit";
-  actions.appendChild(save);
+  save.className = "mc-button mc-button-primary";
+  save.textContent = "Save profile";
 
+  const passwordButton = makeButton(
+    "Change password",
+    openPasswordChange,
+    "secondary"
+  );
+
+  actions.append(save, passwordButton);
   form.append(grid, actions);
 
-  form.addEventListener("submit", async event => {
-    event.preventDefault();
-
-    if (!validateRequired([
-      { field: name.field, label: "Full name" }
-    ])) {
-      return;
-    }
-
-    const newName = name.field.value.trim();
-
-    if (!newName || newName.length > 100) {
-      notify("Your name must contain between 1 and 100 characters.", "warning");
-      return;
-    }
-
-    save.disabled = true;
-
-    try {
-      await updateProfile(studentState.user, {
-        displayName: newName
-      });
-
-      await patchValue(`${PATHS.users}/${uid()}`, {
-        name: newName,
-        displayName: newName,
-        updatedAt: now()
-      });
-
-      studentState.profile = {
-        ...(studentState.profile || {}),
-        name: newName,
-        displayName: newName
-      };
-
-      notify("Profile updated successfully.", "success");
-
-      renderProfile();
-
-    } catch (error) {
-      showError(error, "Could not update profile");
-    } finally {
-      save.disabled = false;
-    }
-  });
-
-  profileSection.section.appendChild(form);
-
-  const passwordSection = makeSection(
-    "Change password",
-    "Use a strong password that you do not reuse on other websites."
-  );
-
-  passwordSection.section.appendChild(
-    makeButton(
-      "Change password",
-      openPasswordChange,
-      "secondary"
-    )
-  );
-
-  section.replaceChildren(
-    profileSection.section,
-    passwordSection.section
-  );
+  details.section.appendChild(form);
+  section.appendChild(details.section);
 }
+
+async function handleProfileSubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+
+  if (
+    !(form instanceof HTMLFormElement) ||
+    form.id !== "studentProfileForm"
+  ) {
+    return;
+  }
+
+  if (state.submitting) {
+    return;
+  }
+
+  const name = String(
+    new FormData(form).get("profileName") || ""
+  ).trim();
+
+  if (name.length < 2 || name.length > LIMITS.nameLength) {
+    notify(
+      `Your display name must contain 2–${LIMITS.nameLength} characters.`,
+      "error"
+    );
+
+    return;
+  }
+
+  state.submitting = true;
+
+  const button = $('button[type="submit"]', form);
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Saving...";
+  }
+
+  try {
+    await withTimeout(
+      updateProfile(state.user, {
+        displayName: name
+      })
+    );
+
+    await patchValue(
+      `${PATHS.users}/${uid()}`,
+      {
+        name,
+        displayName: name,
+        updatedAt: currentTime()
+      }
+    );
+
+    state.profile = {
+      ...state.profile,
+      name,
+      displayName: name
+    };
+
+    notify("Your profile has been updated.", "success");
+
+    renderProfile();
+
+  } catch (error) {
+    reportError(error, "Could not update your profile");
+  } finally {
+    state.submitting = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Save profile";
+    }
+  }
+}
+
+// ============================================================
+// PASSWORD CHANGE
+// ============================================================
 
 function openPasswordChange() {
   const form = document.createElement("form");
+  form.id = "studentPasswordForm";
+  form.noValidate = true;
+
+  const grid = createElement(
+    "div",
+    "student-form-grid"
+  );
 
   const current = makeField(
     "Current password",
     "currentPassword",
     "password",
-    { required: true }
+    {
+      required: true
+    }
   );
 
   const next = makeField(
     "New password",
     "newPassword",
     "password",
-    { required: true }
+    {
+      required: true,
+      min: 8,
+      maxLength: 128
+    }
   );
 
   const confirm = makeField(
     "Confirm new password",
-    "confirmNewPassword",
+    "confirmPassword",
     "password",
-    { required: true }
+    {
+      required: true,
+      maxLength: 128
+    }
   );
-
-  const grid = createElement("div", "student-form-grid");
 
   grid.append(
     current.wrapper,
@@ -1713,259 +2269,361 @@ function openPasswordChange() {
     confirm.wrapper
   );
 
-  form.appendChild(grid);
+  const actions = createElement(
+    "div",
+    "student-form-actions"
+  );
 
-  const modal = openModal({
-    title: "Change password",
-    description: "Verify your current password before saving a new one.",
-    contentElement: form,
+  const submit = document.createElement("button");
 
-    actions: [
-      {
-        label: "Cancel",
-        variant: "secondary",
-        onClick: () => {},
-        closeOnClick: true
-      },
+  submit.type = "submit";
+  submit.className = "mc-button mc-button-primary";
+  submit.textContent = "Update password";
 
-      {
-        label: "Update password",
-        variant: "primary",
-        closeOnClick: false,
+  actions.appendChild(submit);
+  form.append(grid, actions);
 
-        onClick: async () => {
-          if (!validateRequired([
-            { field: current.field, label: "Current password" },
-            { field: next.field, label: "New password" },
-            { field: confirm.field, label: "Password confirmation" }
-          ])) {
-            return;
-          }
+  const container =
+    $("#appView") ||
+    $("#pageContent") ||
+    $("#mainContent");
 
-          if (next.field.value.length < 6) {
-            setFieldError(
-              next.field,
-              "Password must contain at least 6 characters."
-            );
-            return;
-          }
+  if (!container) {
+    notify("The password form could not be opened.", "error");
+    return;
+  }
 
-          if (next.field.value !== confirm.field.value) {
-            setFieldError(
-              confirm.field,
-              "Passwords do not match."
-            );
-            return;
-          }
+  let panel = $("#studentPasswordPanel");
 
-          try {
-            const credential = EmailAuthProvider.credential(
-              studentState.user.email,
-              current.field.value
-            );
+  if (!panel) {
+    panel = createElement(
+      "section",
+      "student-section"
+    );
 
-            await reauthenticateWithCredential(
-              studentState.user,
-              credential
-            );
+    panel.id = "studentPasswordPanel";
+    container.appendChild(panel);
+  }
 
-            await updatePassword(
-              studentState.user,
-              next.field.value
-            );
+  panel.replaceChildren(
+    createElement(
+      "h2",
+      "",
+      "Change password"
+    ),
+    form
+  );
 
-            notify("Password changed successfully.", "success");
-
-            modal?.close?.();
-
-          } catch (error) {
-            showError(error, "Could not change password");
-          }
-        }
-      }
-    ]
+  panel.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
   });
 }
 
-// ============================================================
-// DATA NORMALIZATION
-// ============================================================
+async function handlePasswordSubmit(event) {
+  event.preventDefault();
 
-function normalizeRecords(value) {
-  if (!value || typeof value !== "object") return [];
+  const form = event.target;
 
-  return Object.entries(value)
-    .filter(([, item]) => item && typeof item === "object")
-    .map(([key, item]) => ({
-      ...item,
-      id: item.id || key
-    }));
+  if (
+    !(form instanceof HTMLFormElement) ||
+    form.id !== "studentPasswordForm"
+  ) {
+    return;
+  }
+
+  if (state.submitting) {
+    return;
+  }
+
+  const data = new FormData(form);
+
+  const current = String(
+    data.get("currentPassword") || ""
+  );
+
+  const next = String(
+    data.get("newPassword") || ""
+  );
+
+  const confirm = String(
+    data.get("confirmPassword") || ""
+  );
+
+  if (!current || next.length < 8) {
+    notify(
+      "Enter your current password and a new password of at least 8 characters.",
+      "error"
+    );
+
+    return;
+  }
+
+  if (next !== confirm) {
+    notify("The new passwords do not match.", "error");
+    return;
+  }
+
+  if (next === current) {
+    notify(
+      "Your new password must differ from your current password.",
+      "error"
+    );
+
+    return;
+  }
+
+  state.submitting = true;
+
+  const button = $('button[type="submit"]', form);
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Updating...";
+  }
+
+  try {
+    if (!state.user?.email) {
+      throw new Error(
+        "An email/password account is required to change the password."
+      );
+    }
+
+    const credential = EmailAuthProvider.credential(
+      state.user.email,
+      current
+    );
+
+    await withTimeout(
+      reauthenticateWithCredential(
+        state.user,
+        credential
+      )
+    );
+
+    await withTimeout(
+      updatePassword(state.user, next)
+    );
+
+    form.reset();
+
+    notify("Your password has been changed.", "success");
+
+  } catch (error) {
+    reportError(error, "Could not change password");
+  } finally {
+    state.submitting = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Update password";
+    }
+  }
 }
 
 // ============================================================
-// DATA SUBSCRIPTIONS
+// DATABASE SUBSCRIPTIONS
 // ============================================================
 
-function loadStudentLogs() {
-  // Query only the current student's logs. Firebase rules must
-  // allow this query and index the uid child where necessary.
+function loadStudyLogs() {
   const logsQuery = query(
-    ref(studentState.db, PATHS.logs),
+    ref(state.db, PATHS.logs),
     orderByChild("uid"),
     equalTo(uid()),
-    limitToLast(500)
+    limitToLast(LIMITS.logs)
   );
 
-  return subscribe(
-    PATHS.logs,
+  subscribe(
+    logsQuery,
+
     value => {
-      studentState.records = normalizeRecords(value)
+      state.records = normalizeRecords(value)
         .filter(record => record.uid === uid())
         .sort(
           (a, b) =>
-            safeNumber(b.createdAt) - safeNumber(a.createdAt)
+            safeNumber(b.createdAt) -
+            safeNumber(a.createdAt)
         );
 
-      renderCurrentPageData();
+      renderCurrentPage();
     },
-    error => {
-      console.error(
-        `[Math Class Student] Could not load student logs from "${PATHS.logs}".`,
-        error
-      );
 
-      notify(
-        `Study history could not load. Firebase path: ${PATHS.logs}. Check its read rules and uid index.`,
-        "error"
-      );
-    },
-    logsQuery
+    error => {
+      reportError(error, "Could not load study history");
+    }
   );
 }
 
 function loadAnnouncements() {
-  return subscribe(
-    PATHS.announcements,
+  const announcementsQuery = query(
+    ref(state.db, PATHS.announcements),
+    orderByChild("published"),
+    equalTo(true),
+    limitToLast(LIMITS.announcements)
+  );
+
+  subscribe(
+    announcementsQuery,
 
     value => {
-      studentState.announcements = normalizeRecords(value)
-        .filter(item => item.published !== false)
+      state.announcements = normalizeRecords(value)
+        .filter(item => item.published === true)
         .sort(
           (a, b) =>
-            safeNumber(b.createdAt) - safeNumber(a.createdAt)
+            safeNumber(b.createdAt) -
+            safeNumber(a.createdAt)
         );
 
-      renderCurrentPageData();
+      renderCurrentPage();
     },
 
     error => {
-      console.error(
-        `[Math Class Student] Could not load announcements from "${PATHS.announcements}".`,
-        error
-      );
-
-      notify(
-        `Announcements could not load. Check read permission for "${PATHS.announcements}".`,
-        "error"
-      );
+      reportError(error, "Could not load announcements");
     }
   );
 }
 
 function loadClassChat() {
   const chatQuery = query(
-    ref(studentState.db, PATHS.chat),
-    limitToLast(100)
+    ref(state.db, PATHS.chat),
+    limitToLast(LIMITS.chat)
   );
 
-  return subscribe(
-    PATHS.chat,
+  subscribe(
+    chatQuery,
 
     value => {
-      studentState.chatMessages = normalizeRecords(value)
-        .filter(message => !message.deleted)
+      state.chatMessages = normalizeRecords(value)
+        .filter(message => message.deleted !== true)
         .sort(
           (a, b) =>
-            safeNumber(a.createdAt) - safeNumber(b.createdAt)
+            safeNumber(a.createdAt) -
+            safeNumber(b.createdAt)
         )
-        .slice(-100);
+        .slice(-LIMITS.chat);
 
-      if (
-        studentState.initialized &&
-        studentState.currentPage === "chat"
-      ) {
+      if (state.currentPage === "chat") {
         renderChat();
       }
     },
 
     error => {
-      console.error(
-        `[Math Class Student] Could not load class chat from "${PATHS.chat}".`,
-        error
-      );
-
-      notify(
-        `Class chat could not load. Check read permission for "${PATHS.chat}".`,
-        "error"
-      );
-    },
-
-    chatQuery
+      reportError(error, "Could not load class chat");
+    }
   );
 }
 
-function loadStudentDoubts() {
-  // Query only doubts belonging to the signed-in student.
+function loadDoubts() {
   const doubtsQuery = query(
-    ref(studentState.db, PATHS.doubts),
+    ref(state.db, PATHS.doubts),
     orderByChild("uid"),
     equalTo(uid()),
-    limitToLast(200)
+    limitToLast(LIMITS.doubts)
   );
 
-  return subscribe(
-    PATHS.doubts,
+  subscribe(
+    doubtsQuery,
 
     value => {
-      studentState.doubts = normalizeRecords(value)
+      state.doubts = normalizeRecords(value)
         .filter(doubt => doubt.uid === uid())
         .sort(
           (a, b) =>
-            safeNumber(b.createdAt) - safeNumber(a.createdAt)
+            safeNumber(b.createdAt) -
+            safeNumber(a.createdAt)
         );
 
-      if (
-        studentState.initialized &&
-        studentState.currentPage === "doubts"
-      ) {
+      if (state.currentPage === "doubts") {
         renderDoubts();
       }
     },
 
     error => {
-      console.error(
-        `[Math Class Student] Could not load doubts from "${PATHS.doubts}".`,
-        error
-      );
-
-      notify(
-        `Your doubts could not load. Check the read rules and uid index for "${PATHS.doubts}".`,
-        "error"
-      );
-    },
-
-    doubtsQuery
+      reportError(error, "Could not load your questions");
+    }
   );
 }
 
 // ============================================================
-// PAGE REFRESH
+// PAGE NAVIGATION
 // ============================================================
 
-function renderCurrentPageData() {
-  if (!studentState.initialized) return;
+function normalizePage(page) {
+  const aliases = {
+    "study-tracker": "tracker",
+    "study-history": "history",
+    "class-chat": "chat",
+    "doubt-inbox": "doubts"
+  };
 
-  switch (studentState.currentPage) {
+  const normalized = String(page || "dashboard")
+    .replace(/^#/, "")
+    .trim()
+    .toLowerCase();
+
+  return aliases[normalized] || normalized || "dashboard";
+}
+
+function navigate(page) {
+  const normalized = normalizePage(page);
+
+  state.currentPage = normalized;
+
+  if (typeof state.showPage === "function") {
+    state.showPage(normalized);
+  } else {
+    showSelectedPage(normalized);
+  }
+}
+
+function showSelectedPage(page) {
+  const normalized = normalizePage(page);
+
+  const allowed = [
+    "dashboard",
+    "tracker",
+    "history",
+    "announcements",
+    "chat",
+    "doubts",
+    "profile"
+  ];
+
+  state.currentPage = allowed.includes(normalized)
+    ? normalized
+    : "dashboard";
+
+  $$(".student-dashboard").forEach(section => {
+    section.hidden =
+      section.dataset.page !== state.currentPage;
+  });
+
+  renderCurrentPage();
+}
+
+function handlePageChange(event) {
+  const detail = event.detail || {};
+
+  if (
+    detail.role &&
+    detail.role !== "student"
+  ) {
+    return;
+  }
+
+  showSelectedPage(detail.page || "dashboard");
+}
+
+// ============================================================
+// PAGE RENDERING
+// ============================================================
+
+function renderCurrentPage() {
+  if (!state.initialized) {
+    return;
+  }
+
+  switch (state.currentPage) {
     case "dashboard":
       renderDashboard();
       break;
@@ -1995,8 +2653,14 @@ function renderCurrentPageData() {
       break;
 
     default:
+      state.currentPage = "dashboard";
       renderDashboard();
   }
+
+  $$(".student-dashboard").forEach(section => {
+    section.hidden =
+      section.dataset.page !== state.currentPage;
+  });
 }
 
 function renderAllPages() {
@@ -2008,38 +2672,90 @@ function renderAllPages() {
   renderDoubts();
   renderProfile();
 
-  showSelectedPage(studentState.currentPage);
+  showSelectedPage(state.currentPage);
 }
 
-function showSelectedPage(page) {
-  const aliases = {
-    "study-tracker": "tracker",
-    "study-history": "history",
-    "class-chat": "chat",
-    "doubt-inbox": "doubts"
-  };
+// ============================================================
+// EVENT HANDLERS
+// ============================================================
 
-  const normalized = aliases[page] || page || "dashboard";
+function handleDelegatedSubmit(event) {
+  const form = event.target;
 
-  const allowedPages = [
-    "dashboard",
-    "tracker",
-    "history",
-    "announcements",
-    "chat",
-    "doubts",
-    "profile"
-  ];
+  if (!(form instanceof HTMLFormElement)) {
+    return;
+  }
 
-  studentState.currentPage = allowedPages.includes(normalized)
-    ? normalized
-    : "dashboard";
+  switch (form.id) {
+    case "studentStudyForm":
+      void handleStudySubmit(event);
+      break;
 
-  $$(".student-dashboard").forEach(section => {
-    section.hidden = section.dataset.page !== studentState.currentPage;
-  });
+    case "studentChatForm":
+      void handleChatSubmit(event);
+      break;
 
-  renderCurrentPageData();
+    case "studentDoubtForm":
+      void handleDoubtSubmit(event);
+      break;
+
+    case "studentProfileForm":
+      void handleProfileSubmit(event);
+      break;
+
+    case "studentPasswordForm":
+      void handlePasswordSubmit(event);
+      break;
+
+    default:
+      break;
+  }
+}
+
+function bindEvents() {
+  if (!state.delegatedSubmitHandler) {
+    state.delegatedSubmitHandler =
+      handleDelegatedSubmit;
+
+    document.addEventListener(
+      "submit",
+      state.delegatedSubmitHandler
+    );
+  }
+
+  if (!state.delegatedClickHandler) {
+    state.delegatedClickHandler = event => {
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      const link = target.closest("[data-student-route]");
+
+      if (!link) {
+        return;
+      }
+
+      event.preventDefault();
+
+      navigate(link.dataset.studentRoute);
+    };
+
+    document.addEventListener(
+      "click",
+      state.delegatedClickHandler
+    );
+  }
+
+  if (!state.pageChangeHandler) {
+    state.pageChangeHandler = handlePageChange;
+
+    window.addEventListener(
+      "mathclass:pagechange",
+      state.pageChangeHandler
+    );
+  }
 }
 
 // ============================================================
@@ -2047,49 +2763,41 @@ function showSelectedPage(page) {
 // ============================================================
 
 function cleanup() {
-  studentState.unsubscribers.forEach(unsubscribe => {
-    try {
-      unsubscribe();
-    } catch (error) {
-      console.warn(
-        "[Math Class Student] Listener cleanup warning:",
-        error
-      );
-    }
-  });
+  cleanupListeners();
 
-  studentState.unsubscribers = [];
-
-  if (studentState.pageChangeHandler) {
+  if (state.pageChangeHandler) {
     window.removeEventListener(
       "mathclass:pagechange",
-      studentState.pageChangeHandler
+      state.pageChangeHandler
     );
 
-    studentState.pageChangeHandler = null;
+    state.pageChangeHandler = null;
   }
 
-  studentState.initialized = false;
-}
+  if (state.delegatedSubmitHandler) {
+    document.removeEventListener(
+      "submit",
+      state.delegatedSubmitHandler
+    );
 
-window.addEventListener("mathclass:auth-ready", event => {
-  if (!event.detail?.user) {
-    cleanup();
+    state.delegatedSubmitHandler = null;
   }
-});
 
-// ============================================================
-// PAGE CHANGE HANDLER
-// ============================================================
+  if (state.delegatedClickHandler) {
+    document.removeEventListener(
+      "click",
+      state.delegatedClickHandler
+    );
 
-function handlePageChange(event) {
-  const { page, role } = event.detail || {};
+    state.delegatedClickHandler = null;
+  }
 
-  // Allow events that don't include a role, but reject events
-  // explicitly intended for a different role.
-  if (role && role !== "student") return;
-
-  showSelectedPage(page || "dashboard");
+  state.initialized = false;
+  state.submitting = false;
+  state.records = [];
+  state.announcements = [];
+  state.chatMessages = [];
+  state.doubts = [];
 }
 
 // ============================================================
@@ -2099,58 +2807,57 @@ function handlePageChange(event) {
 export async function init(context) {
   cleanup();
 
-  studentState.auth = context.auth;
-  studentState.db = context.db;
-  studentState.user = context.user;
-  studentState.profile = context.profile || {};
-  studentState.toast = context.toast;
-  studentState.showPage = context.showPage;
-
-  if (!studentState.user?.uid) {
-    throw new Error("A signed-in student account is required.");
+  if (!context?.user?.uid) {
+    throw new Error(
+      "A signed-in student account is required."
+    );
   }
 
-  // Fixed: the original code checked studentState.role, which
-  // was never defined. The role belongs to the profile object.
+  if (!context.db) {
+    throw new Error(
+      "Firebase Realtime Database is unavailable."
+    );
+  }
+
   if (
-    studentState.profile.role &&
-    studentState.profile.role !== "student"
+    context.profile?.role &&
+    context.profile.role !== "student"
   ) {
     throw new Error(
-      "This module is only for student accounts."
+      "The student module cannot be opened by this account."
     );
   }
 
-  if (!studentState.db) {
-    throw new Error(
-      "Firebase Realtime Database is not available."
-    );
-  }
+  state.auth = context.auth;
+  state.db = context.db;
+  state.user = context.user;
+  state.profile = context.profile || {};
+  state.toast = context.toast;
+  state.showPage = context.showPage;
 
-  const configModule = await import("./firebase-config.js");
-  studentState.storage = configModule.storage || null;
+  try {
+    const config = await import("./firebase-config.js");
+    state.storage = config.storage || null;
+  } catch (error) {
+    // Storage is not required for the features implemented here.
+    state.storage = null;
+  }
 
   injectStyles();
 
-  studentState.currentPage = "dashboard";
-  studentState.initialized = true;
+  state.currentPage = "dashboard";
+  state.initialized = true;
 
-  // Render the interface immediately rather than waiting for
-  // Firebase listeners to return data.
+  bindEvents();
+
+  // Render immediately. Do not wait for Firebase listeners.
   renderAllPages();
 
-  // Subscribe to the application's database paths.
-  loadStudentLogs();
+  // Attach live listeners to the existing project paths.
+  loadStudyLogs();
   loadAnnouncements();
   loadClassChat();
-  loadStudentDoubts();
-
-  studentState.pageChangeHandler = handlePageChange;
-
-  window.addEventListener(
-    "mathclass:pagechange",
-    studentState.pageChangeHandler
-  );
+  loadDoubts();
 
   return {
     cleanup,
