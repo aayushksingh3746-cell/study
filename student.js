@@ -2,6 +2,7 @@
 // MATH CLASS — STUDENT MODULE
 // File: student.js
 // Firebase SDK: 10.5.0 Modular
+// Corrected version based on the original implementation
 // ============================================================
 
 import {
@@ -68,15 +69,19 @@ const studentState = {
   doubts: [],
 
   activeDate: new Date().toISOString().slice(0, 10),
-  submitting: false
+  submitting: false,
+  currentPage: "dashboard",
+  pageChangeHandler: null
 };
 
+// These paths must match the database structure used by the
+// rest of the Math Class application.
 const PATHS = {
   users: "users",
-  logs: "mathLogs",
+  logs: "daily_study_logs",
   announcements: "announcements",
-  chat: "classChat",
-  doubts: "doubts"
+  chat: "class_chat",
+  doubts: "direct_doubts"
 };
 
 const MAX_PROOF_SIZE_MB = 5;
@@ -103,12 +108,13 @@ function notify(message, type = "info") {
 }
 
 function uid() {
-  return studentState.user?.uid;
+  return studentState.user?.uid || "";
 }
 
 function currentUserName() {
   return (
     studentState.profile?.name ||
+    studentState.profile?.displayName ||
     studentState.user?.displayName ||
     studentState.user?.email?.split("@")[0] ||
     "Student"
@@ -148,20 +154,31 @@ function formatError(error) {
   const messages = {
     "PERMISSION_DENIED":
       "Firebase denied access. Check your Realtime Database rules.",
+
+    "database/permission-denied":
+      "Firebase denied access. Check the database rules and the requested path.",
+
     "storage/unauthorized":
       "You don't have permission to upload this file.",
+
     "storage/canceled":
       "The upload was cancelled.",
+
     "storage/retry-limit-exceeded":
       "The upload failed after several attempts. Try again.",
+
     "auth/requires-recent-login":
       "Please sign in again before changing your password.",
+
     "auth/wrong-password":
       "Your current password is incorrect.",
+
     "auth/invalid-credential":
       "Your current password is incorrect.",
+
     "auth/weak-password":
       "Your new password must contain at least 6 characters.",
+
     "auth/network-request-failed":
       "Network error. Check your internet connection."
   };
@@ -174,19 +191,51 @@ function showError(error, context = "Operation failed") {
   notify(`${context}: ${formatError(error)}`, "error");
 }
 
-function subscribe(path, callback, onError = null) {
-  const databaseReference = ref(studentState.db, path);
+function subscribe(path, callback, onError = null, source = null) {
+  if (!studentState.db) {
+    const error = new Error("Firebase Realtime Database is not initialized.");
+    showError(error, `Cannot subscribe to ${path}`);
+    return () => {};
+  }
+
+  const databaseReference = source || ref(studentState.db, path);
 
   const unsubscribe = onValue(
     databaseReference,
-    snapshot => callback(snapshot.val(), snapshot),
+
+    snapshot => {
+      try {
+        callback(snapshot.val(), snapshot);
+      } catch (error) {
+        console.error(
+          `[Math Class Student] Failed to process data from "${path}":`,
+          error
+        );
+
+        if (onError) {
+          onError(error);
+        } else {
+          notify(
+            `Information from "${path}" could not be displayed.`,
+            "error"
+          );
+        }
+      }
+    },
+
     error => {
-      console.error(`[Math Class Student] Listener failed at ${path}:`, error);
+      console.error(
+        `[Math Class Student] Firebase listener failed at "${path}".`,
+        error
+      );
 
       if (onError) {
         onError(error);
       } else {
-        notify("Unable to load some information. Please retry.", "error");
+        notify(
+          `Unable to load "${path}". Check Firebase permissions and database paths.`,
+          "error"
+        );
       }
     }
   );
@@ -255,6 +304,7 @@ function makeField(labelText, name, type = "text", options = {}) {
 
   if (options.min !== undefined) field.min = options.min;
   if (options.max !== undefined) field.max = options.max;
+
   if (options.maxLength !== undefined) {
     field.maxLength = options.maxLength;
   }
@@ -285,6 +335,11 @@ function injectStyles() {
       display: grid;
       gap: 24px;
       width: 100%;
+      min-width: 0;
+    }
+
+    .student-dashboard[hidden] {
+      display: none !important;
     }
 
     .student-welcome {
@@ -642,8 +697,14 @@ function getPageContainer(page, title, description = "") {
   let section = $(`[data-page="${page}"]`);
 
   if (!section) {
-    const appView = $("#appView") || $("#dashboardView") ||
-      $("#application") || document.body;
+    const appView =
+      $("#appView") ||
+      $("#pageContent") ||
+      $("#mainContent") ||
+      $("#dashboardView") ||
+      $("#application") ||
+      $("main") ||
+      document.body;
 
     section = createElement("section", "student-dashboard");
     section.dataset.page = page;
@@ -752,9 +813,9 @@ function renderDashboard() {
   const actions = createElement("div", "student-form-actions");
 
   actions.append(
-    makeButton("Log today's practice", () => studentState.showPage("tracker")),
-    makeButton("View study history", () => studentState.showPage("history"), "secondary"),
-    makeButton("Ask a doubt", () => studentState.showPage("doubts"), "secondary")
+    makeButton("Log today's practice", () => studentState.showPage?.("tracker")),
+    makeButton("View study history", () => studentState.showPage?.("history"), "secondary"),
+    makeButton("Ask a doubt", () => studentState.showPage?.("doubts"), "secondary")
   );
 
   quick.section.appendChild(actions);
@@ -776,7 +837,7 @@ function renderDashboard() {
       title: "Your journey starts here",
       description: "Log your first math practice session to start tracking your progress.",
       actionLabel: "Log practice",
-      onAction: () => studentState.showPage("tracker")
+      onAction: () => studentState.showPage?.("tracker")
     }));
   } else {
     records.forEach(record => list.appendChild(renderLogItem(record)));
@@ -792,6 +853,7 @@ function renderDashboard() {
   const announcementList = createElement("div", "student-list");
 
   const latest = [...studentState.announcements]
+    .filter(item => item.published !== false)
     .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt))
     .slice(0, 3);
 
@@ -830,7 +892,7 @@ function createWelcomeHeader() {
 
   const button = makeButton(
     "Log practice",
-    () => studentState.showPage("tracker")
+    () => studentState.showPage?.("tracker")
   );
 
   header.append(left, button);
@@ -920,13 +982,13 @@ function renderTracker() {
     accept: "image/jpeg,image/png,image/webp"
   });
 
-  const proofHint = createElement(
-    "p",
-    "student-muted",
-    "Upload a clear image of your written work. Images are optional."
+  proof.wrapper.appendChild(
+    createElement(
+      "p",
+      "student-muted",
+      "Upload a clear image of your written work. Images are optional."
+    )
   );
-
-  proof.wrapper.appendChild(proofHint);
 
   grid.append(
     date.wrapper,
@@ -950,14 +1012,14 @@ function renderTracker() {
 
     if (studentState.submitting) return;
 
-    const fields = [
+    if (!validateRequired([
       { field: date.field, label: "Practice date" },
       { field: topic.field, label: "Math topic" },
       { field: questions.field, label: "Questions solved" },
       { field: duration.field, label: "Study duration" }
-    ];
-
-    if (!validateRequired(fields)) return;
+    ])) {
+      return;
+    }
 
     const questionCount = Number(questions.field.value);
     const durationMinutes = Number(duration.field.value);
@@ -999,6 +1061,11 @@ function renderTracker() {
         notify(validation.message, "warning");
         return;
       }
+
+      if (!studentState.storage) {
+        notify("Firebase Storage is unavailable. Please try again later.", "error");
+        return;
+      }
     }
 
     studentState.submitting = true;
@@ -1010,12 +1077,15 @@ function renderTracker() {
       const recordId = recordRef.key;
 
       let proofURL = "";
+      let proofPath = "";
 
       if (file) {
-        const path = `math-proof/${uid()}/${recordId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        proofPath =
+          `math-proof/${uid()}/${recordId}/` +
+          `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
         const uploaded = await uploadBytes(
-          storageRef(studentState.storage, path),
+          storageRef(studentState.storage, proofPath),
           file,
           { contentType: file.type }
         );
@@ -1034,9 +1104,7 @@ function renderTracker() {
         duration: durationMinutes,
         notes: notes.field.value.trim(),
         proofURL,
-        proofPath: file
-          ? `math-proof/${uid()}/${recordId}`
-          : "",
+        proofPath,
         status: "submitted",
         createdAt: now(),
         updatedAt: now()
@@ -1046,10 +1114,14 @@ function renderTracker() {
 
       form.reset();
       date.field.value = today;
+      studentState.activeDate = today;
 
-      notify("Your practice log has been submitted for teacher review.", "success");
+      notify(
+        "Your practice log has been submitted for teacher review.",
+        "success"
+      );
 
-      studentState.showPage("history");
+      studentState.showPage?.("history");
 
     } catch (error) {
       showError(error, "Could not save practice log");
@@ -1061,7 +1133,6 @@ function renderTracker() {
   });
 
   formSection.section.appendChild(form);
-
   section.replaceChildren(formSection.section);
 }
 
@@ -1092,12 +1163,11 @@ function renderHistory() {
       title: "No study history yet",
       description: "Your practice sessions will appear here after you submit a log.",
       actionLabel: "Log practice",
-      onAction: () => studentState.showPage("tracker")
+      onAction: () => studentState.showPage?.("tracker")
     }));
   } else {
     records.forEach(record => {
       const item = renderLogItem(record);
-
       const details = item.firstElementChild;
 
       if (record.notes) {
@@ -1140,7 +1210,11 @@ function renderHistory() {
 function renderAnnouncement(item) {
   const card = createElement("article", "student-announcement");
 
-  const heading = createElement("h3", "", item.title || "Class announcement");
+  const heading = createElement(
+    "h3",
+    "",
+    item.title || "Class announcement"
+  );
 
   const meta = createElement("div", "student-announcement-meta");
 
@@ -1421,7 +1495,9 @@ function renderDoubts() {
       return;
     }
 
-    if (question.field.value.trim().length > MAX_DOUBT_LENGTH) {
+    const questionValue = question.field.value.trim();
+
+    if (questionValue.length > MAX_DOUBT_LENGTH) {
       notify(`Your question must be ${MAX_DOUBT_LENGTH} characters or fewer.`, "warning");
       return;
     }
@@ -1439,7 +1515,7 @@ function renderDoubts() {
         studentEmail: studentState.user.email || "",
         subject: subject.field.value.trim(),
         category: category.field.value,
-        question: question.field.value.trim(),
+        question: questionValue,
         status: "submitted",
         reply: "",
         createdAt: now(),
@@ -1447,7 +1523,11 @@ function renderDoubts() {
       });
 
       form.reset();
-      notify("Your doubt has been sent privately to your teacher.", "success");
+
+      notify(
+        "Your doubt has been sent privately to your teacher.",
+        "success"
+      );
 
     } catch (error) {
       showError(error, "Could not submit doubt");
@@ -1519,7 +1599,8 @@ function renderProfile() {
 
   const joined = makeField("Account created", "profileCreated", "text");
   joined.field.value = formatDate(
-    studentState.profile?.createdAt || studentState.user.metadata?.creationTime
+    studentState.profile?.createdAt ||
+    studentState.user.metadata?.creationTime
   );
   joined.field.readOnly = true;
 
@@ -1544,8 +1625,8 @@ function renderProfile() {
 
     const newName = name.field.value.trim();
 
-    if (newName.length > 100) {
-      notify("Your name cannot exceed 100 characters.", "warning");
+    if (!newName || newName.length > 100) {
+      notify("Your name must contain between 1 and 100 characters.", "warning");
       return;
     }
 
@@ -1558,14 +1639,19 @@ function renderProfile() {
 
       await patchValue(`${PATHS.users}/${uid()}`, {
         name: newName,
+        displayName: newName,
         updatedAt: now()
       });
 
-      studentState.profile.name = newName;
+      studentState.profile = {
+        ...(studentState.profile || {}),
+        name: newName,
+        displayName: newName
+      };
 
       notify("Profile updated successfully.", "success");
 
-      renderDashboard();
+      renderProfile();
 
     } catch (error) {
       showError(error, "Could not update profile");
@@ -1581,41 +1667,59 @@ function renderProfile() {
     "Use a strong password that you do not reuse on other websites."
   );
 
-  const passwordButton = makeButton(
-    "Change password",
-    openPasswordChange,
-    "secondary"
+  passwordSection.section.appendChild(
+    makeButton(
+      "Change password",
+      openPasswordChange,
+      "secondary"
+    )
   );
 
-  passwordSection.section.appendChild(passwordButton);
-
-  section.replaceChildren(profileSection.section, passwordSection.section);
+  section.replaceChildren(
+    profileSection.section,
+    passwordSection.section
+  );
 }
 
 function openPasswordChange() {
   const form = document.createElement("form");
 
-  const current = makeField("Current password", "currentPassword", "password", {
-    required: true
-  });
+  const current = makeField(
+    "Current password",
+    "currentPassword",
+    "password",
+    { required: true }
+  );
 
-  const next = makeField("New password", "newPassword", "password", {
-    required: true
-  });
+  const next = makeField(
+    "New password",
+    "newPassword",
+    "password",
+    { required: true }
+  );
 
-  const confirm = makeField("Confirm new password", "confirmNewPassword", "password", {
-    required: true
-  });
+  const confirm = makeField(
+    "Confirm new password",
+    "confirmNewPassword",
+    "password",
+    { required: true }
+  );
 
   const grid = createElement("div", "student-form-grid");
 
-  grid.append(current.wrapper, next.wrapper, confirm.wrapper);
+  grid.append(
+    current.wrapper,
+    next.wrapper,
+    confirm.wrapper
+  );
+
   form.appendChild(grid);
 
   const modal = openModal({
     title: "Change password",
     description: "Verify your current password before saving a new one.",
     contentElement: form,
+
     actions: [
       {
         label: "Cancel",
@@ -1623,10 +1727,12 @@ function openPasswordChange() {
         onClick: () => {},
         closeOnClick: true
       },
+
       {
         label: "Update password",
         variant: "primary",
         closeOnClick: false,
+
         onClick: async () => {
           if (!validateRequired([
             { field: current.field, label: "Current password" },
@@ -1637,12 +1743,18 @@ function openPasswordChange() {
           }
 
           if (next.field.value.length < 6) {
-            setFieldError(next.field, "Password must contain at least 6 characters.");
+            setFieldError(
+              next.field,
+              "Password must contain at least 6 characters."
+            );
             return;
           }
 
           if (next.field.value !== confirm.field.value) {
-            setFieldError(confirm.field, "Passwords do not match.");
+            setFieldError(
+              confirm.field,
+              "Passwords do not match."
+            );
             return;
           }
 
@@ -1657,10 +1769,14 @@ function openPasswordChange() {
               credential
             );
 
-            await updatePassword(studentState.user, next.field.value);
+            await updatePassword(
+              studentState.user,
+              next.field.value
+            );
 
             notify("Password changed successfully.", "success");
-            modal.close();
+
+            modal?.close?.();
 
           } catch (error) {
             showError(error, "Could not change password");
@@ -1672,58 +1788,174 @@ function openPasswordChange() {
 }
 
 // ============================================================
-// DATA SUBSCRIPTIONS
+// DATA NORMALIZATION
 // ============================================================
 
 function normalizeRecords(value) {
   if (!value || typeof value !== "object") return [];
 
-  return Object.entries(value).map(([key, item]) => ({
-    ...item,
-    id: item?.id || key
-  }));
+  return Object.entries(value)
+    .filter(([, item]) => item && typeof item === "object")
+    .map(([key, item]) => ({
+      ...item,
+      id: item.id || key
+    }));
 }
 
-function loadStudentLogs() {
-  return subscribe(PATHS.logs, value => {
-    studentState.records = normalizeRecords(value)
-      .filter(record => record.uid === uid());
+// ============================================================
+// DATA SUBSCRIPTIONS
+// ============================================================
 
-    renderCurrentPageData();
-  });
+function loadStudentLogs() {
+  // Query only the current student's logs. Firebase rules must
+  // allow this query and index the uid child where necessary.
+  const logsQuery = query(
+    ref(studentState.db, PATHS.logs),
+    orderByChild("uid"),
+    equalTo(uid()),
+    limitToLast(500)
+  );
+
+  return subscribe(
+    PATHS.logs,
+    value => {
+      studentState.records = normalizeRecords(value)
+        .filter(record => record.uid === uid())
+        .sort(
+          (a, b) =>
+            safeNumber(b.createdAt) - safeNumber(a.createdAt)
+        );
+
+      renderCurrentPageData();
+    },
+    error => {
+      console.error(
+        `[Math Class Student] Could not load student logs from "${PATHS.logs}".`,
+        error
+      );
+
+      notify(
+        `Study history could not load. Firebase path: ${PATHS.logs}. Check its read rules and uid index.`,
+        "error"
+      );
+    },
+    logsQuery
+  );
 }
 
 function loadAnnouncements() {
-  return subscribe(PATHS.announcements, value => {
-    studentState.announcements = normalizeRecords(value)
-      .filter(item => item.published !== false);
+  return subscribe(
+    PATHS.announcements,
 
-    renderCurrentPageData();
-  });
+    value => {
+      studentState.announcements = normalizeRecords(value)
+        .filter(item => item.published !== false)
+        .sort(
+          (a, b) =>
+            safeNumber(b.createdAt) - safeNumber(a.createdAt)
+        );
+
+      renderCurrentPageData();
+    },
+
+    error => {
+      console.error(
+        `[Math Class Student] Could not load announcements from "${PATHS.announcements}".`,
+        error
+      );
+
+      notify(
+        `Announcements could not load. Check read permission for "${PATHS.announcements}".`,
+        "error"
+      );
+    }
+  );
 }
 
 function loadClassChat() {
-  return subscribe(PATHS.chat, value => {
-    studentState.chatMessages = normalizeRecords(value)
-      .filter(message => !message.deleted)
-      .sort((a, b) => safeNumber(a.createdAt) - safeNumber(b.createdAt))
-      .slice(-100);
+  const chatQuery = query(
+    ref(studentState.db, PATHS.chat),
+    limitToLast(100)
+  );
 
-    if (studentState.initialized && studentState.currentPage === "chat") {
-      renderChat();
-    }
-  });
+  return subscribe(
+    PATHS.chat,
+
+    value => {
+      studentState.chatMessages = normalizeRecords(value)
+        .filter(message => !message.deleted)
+        .sort(
+          (a, b) =>
+            safeNumber(a.createdAt) - safeNumber(b.createdAt)
+        )
+        .slice(-100);
+
+      if (
+        studentState.initialized &&
+        studentState.currentPage === "chat"
+      ) {
+        renderChat();
+      }
+    },
+
+    error => {
+      console.error(
+        `[Math Class Student] Could not load class chat from "${PATHS.chat}".`,
+        error
+      );
+
+      notify(
+        `Class chat could not load. Check read permission for "${PATHS.chat}".`,
+        "error"
+      );
+    },
+
+    chatQuery
+  );
 }
 
 function loadStudentDoubts() {
-  return subscribe(PATHS.doubts, value => {
-    studentState.doubts = normalizeRecords(value)
-      .filter(doubt => doubt.uid === uid());
+  // Query only doubts belonging to the signed-in student.
+  const doubtsQuery = query(
+    ref(studentState.db, PATHS.doubts),
+    orderByChild("uid"),
+    equalTo(uid()),
+    limitToLast(200)
+  );
 
-    if (studentState.initialized && studentState.currentPage === "doubts") {
-      renderDoubts();
-    }
-  });
+  return subscribe(
+    PATHS.doubts,
+
+    value => {
+      studentState.doubts = normalizeRecords(value)
+        .filter(doubt => doubt.uid === uid())
+        .sort(
+          (a, b) =>
+            safeNumber(b.createdAt) - safeNumber(a.createdAt)
+        );
+
+      if (
+        studentState.initialized &&
+        studentState.currentPage === "doubts"
+      ) {
+        renderDoubts();
+      }
+    },
+
+    error => {
+      console.error(
+        `[Math Class Student] Could not load doubts from "${PATHS.doubts}".`,
+        error
+      );
+
+      notify(
+        `Your doubts could not load. Check the read rules and uid index for "${PATHS.doubts}".`,
+        "error"
+      );
+    },
+
+    doubtsQuery
+  );
 }
 
 // ============================================================
@@ -1761,6 +1993,9 @@ function renderCurrentPageData() {
     case "profile":
       renderProfile();
       break;
+
+    default:
+      renderDashboard();
   }
 }
 
@@ -1772,6 +2007,39 @@ function renderAllPages() {
   renderChat();
   renderDoubts();
   renderProfile();
+
+  showSelectedPage(studentState.currentPage);
+}
+
+function showSelectedPage(page) {
+  const aliases = {
+    "study-tracker": "tracker",
+    "study-history": "history",
+    "class-chat": "chat",
+    "doubt-inbox": "doubts"
+  };
+
+  const normalized = aliases[page] || page || "dashboard";
+
+  const allowedPages = [
+    "dashboard",
+    "tracker",
+    "history",
+    "announcements",
+    "chat",
+    "doubts",
+    "profile"
+  ];
+
+  studentState.currentPage = allowedPages.includes(normalized)
+    ? normalized
+    : "dashboard";
+
+  $$(".student-dashboard").forEach(section => {
+    section.hidden = section.dataset.page !== studentState.currentPage;
+  });
+
+  renderCurrentPageData();
 }
 
 // ============================================================
@@ -1783,11 +2051,24 @@ function cleanup() {
     try {
       unsubscribe();
     } catch (error) {
-      console.warn("[Math Class Student] Cleanup warning:", error);
+      console.warn(
+        "[Math Class Student] Listener cleanup warning:",
+        error
+      );
     }
   });
 
   studentState.unsubscribers = [];
+
+  if (studentState.pageChangeHandler) {
+    window.removeEventListener(
+      "mathclass:pagechange",
+      studentState.pageChangeHandler
+    );
+
+    studentState.pageChangeHandler = null;
+  }
+
   studentState.initialized = false;
 }
 
@@ -1796,6 +2077,20 @@ window.addEventListener("mathclass:auth-ready", event => {
     cleanup();
   }
 });
+
+// ============================================================
+// PAGE CHANGE HANDLER
+// ============================================================
+
+function handlePageChange(event) {
+  const { page, role } = event.detail || {};
+
+  // Allow events that don't include a role, but reject events
+  // explicitly intended for a different role.
+  if (role && role !== "student") return;
+
+  showSelectedPage(page || "dashboard");
+}
 
 // ============================================================
 // INITIALIZATION
@@ -1807,51 +2102,58 @@ export async function init(context) {
   studentState.auth = context.auth;
   studentState.db = context.db;
   studentState.user = context.user;
-  studentState.profile = context.profile;
+  studentState.profile = context.profile || {};
   studentState.toast = context.toast;
   studentState.showPage = context.showPage;
-
-  // Firebase Storage is exported by firebase-config.js.
-  // Importing it here avoids changing the shared config file.
-  const configModule = await import("./firebase-config.js");
-  studentState.storage = configModule.storage;
 
   if (!studentState.user?.uid) {
     throw new Error("A signed-in student account is required.");
   }
 
-  if (studentState.role && studentState.role !== "student") {
-    throw new Error("This module is only for student accounts.");
+  // Fixed: the original code checked studentState.role, which
+  // was never defined. The role belongs to the profile object.
+  if (
+    studentState.profile.role &&
+    studentState.profile.role !== "student"
+  ) {
+    throw new Error(
+      "This module is only for student accounts."
+    );
   }
+
+  if (!studentState.db) {
+    throw new Error(
+      "Firebase Realtime Database is not available."
+    );
+  }
+
+  const configModule = await import("./firebase-config.js");
+  studentState.storage = configModule.storage || null;
 
   injectStyles();
 
-  // Render the interface immediately so the student does not
-  // see an empty screen while Firebase data is loading.
+  studentState.currentPage = "dashboard";
   studentState.initialized = true;
+
+  // Render the interface immediately rather than waiting for
+  // Firebase listeners to return data.
   renderAllPages();
 
-  // Subscribe to shared class data. Every record is filtered
-  // for display, but Firebase Rules must enforce real access.
+  // Subscribe to the application's database paths.
   loadStudentLogs();
   loadAnnouncements();
   loadClassChat();
   loadStudentDoubts();
 
-  window.addEventListener("mathclass:pagechange", handlePageChange);
+  studentState.pageChangeHandler = handlePageChange;
+
+  window.addEventListener(
+    "mathclass:pagechange",
+    studentState.pageChangeHandler
+  );
 
   return {
     cleanup,
     refresh: renderAllPages
   };
-}
-
-function handlePageChange(event) {
-  const { page, role } = event.detail || {};
-
-  if (role !== "student") return;
-
-  studentState.currentPage = page || "dashboard";
-
-  renderCurrentPageData();
 }
