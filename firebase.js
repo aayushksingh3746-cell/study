@@ -1,5 +1,6 @@
 // ============================================
 // MATH CLASS PORTAL — FIREBASE CONFIGURATION
+// File: firebase.js
 // ============================================
 
 import { initializeApp } from
@@ -19,7 +20,7 @@ import {
   getStorage
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
 
-// Your existing Firebase project configuration.
+// Your Firebase project configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDQ3bYoj549-7hFeieHHMAValS757IWsTY",
   authDomain: "study-c3017.firebaseapp.com",
@@ -30,18 +31,21 @@ const firebaseConfig = {
   measurementId: "G-PYCYLLF5E2"
 };
 
-// Initialise Firebase.
+// Initialise Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialise services.
+// Initialise Firebase services
 export const auth = getAuth(app);
+
 export const db = getDatabase(app);
+
 export const storage = getStorage(app);
 
-// Persistent authentication.
+// Keep the user's sign-in persistent
 export const persistenceReady = setPersistence(
   auth,
   browserLocalPersistence
 );
 
+// Export the Firebase application
 export default app;
