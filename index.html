@@ -2,841 +2,255 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0b1020">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <meta name="theme-color" content="#090d19">
+
   <title>Math Class Portal</title>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./style.css">
 
-  <!-- Browser Image Compression -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/browser-image-compression/2.0.2/browser-image-compression.js"></script>
-
-  <style>
-    :root {
-      --bg: #0b1020;
-      --surface: #121a2d;
-      --surface2: #1a2540;
-      --border: #293650;
-      --text: #eef3ff;
-      --muted: #9aa9c5;
-      --accent: #818cf8;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
-    button,
-    input,
-    textarea,
-    select {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-    }
-
-    .field {
-      width: 100%;
-      padding: 12px 14px;
-      background: #0b1222;
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 10px;
-      outline: none;
-    }
-
-    .field:focus {
-      border-color: var(--accent);
-    }
-
-    .btn {
-      padding: 10px 15px;
-      border-radius: 10px;
-      font-weight: 650;
-      transition: opacity 0.15s;
-    }
-
-    .btn:hover {
-      opacity: 0.86;
-    }
-
-    .btn-primary {
-      background: #6366f1;
-      color: white;
-    }
-
-    .btn-secondary {
-      background: var(--surface2);
-      color: white;
-    }
-
-    .btn-danger {
-      background: #7f1d1d;
-      color: white;
-    }
-
-    .nav-btn {
-      display: block;
-      width: 100%;
-      padding: 12px;
-      text-align: left;
-      border-radius: 10px;
-      color: var(--muted);
-    }
-
-    .nav-btn.active {
-      background: #252e50;
-      color: white;
-    }
-
-    .muted {
-      color: var(--muted);
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .wrap {
-      overflow-wrap: anywhere;
-    }
-
-    /* Watchdog-compatible loading animation */
-    .loader {
-      width: 40px;
-      height: 40px;
-      border: 4px solid #34415d;
-      border-top-color: #818cf8;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    #toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 100;
-      max-width: 92%;
-      padding: 12px 18px;
-      border-radius: 12px;
-      background: #24304b;
-      box-shadow: 0 8px 30px #0005;
-    }
-
-    .message {
-      padding: 12px;
-      border-radius: 12px;
-      background: #1a2540;
-      margin-bottom: 10px;
-    }
-
-    .chat-message {
-      max-width: 90%;
-      padding: 10px 13px;
-      border-radius: 14px;
-      background: #202d49;
-      margin-bottom: 10px;
-    }
-
-    .chat-message.mine {
-      margin-left: auto;
-      background: #3730a3;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 4px 9px;
-      font-size: 12px;
-      border-radius: 999px;
-      background: #293650;
-    }
-
-    .section-title {
-      font-size: 22px;
-      font-weight: 800;
-      margin-bottom: 6px;
-    }
-
-    @media (min-width: 768px) {
-      .main-layout {
-        display: grid;
-        grid-template-columns: 230px minmax(0, 1fr);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .loader {
-        animation-duration: 1.8s;
-      }
-
-      * {
-        scroll-behavior: auto !important;
-      }
-    }
-  </style>
+  <script type="module" src="./app.js"></script>
 </head>
 
 <body>
 
-  <!-- ==========================================
-       PRELOADER
-       Watchdog prevents an endless loading screen.
-       ========================================== -->
+  <!-- Background decoration -->
+  <div class="background-glow glow-one"></div>
+  <div class="background-glow glow-two"></div>
 
-  <div
-    id="preloader"
-    class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4"
-    style="background:#0b1020"
-    role="status"
-    aria-live="polite"
-  >
-    <div class="loader"></div>
+  <!-- Application -->
+  <main class="app-container">
 
-    <h1 class="text-xl font-bold">
-      Math Class Portal
-    </h1>
+    <!-- Brand -->
+    <header class="brand">
+      <div class="brand-icon">∑</div>
 
-    <p id="loadingText" class="muted text-sm">
-      Starting the classroom...
-    </p>
-
-    <p class="muted text-xs">
-      Please wait a moment.
-    </p>
-
-    <button
-      id="retryButton"
-      type="button"
-      class="btn btn-primary hidden"
-      onclick="location.reload()"
-    >
-      Retry
-    </button>
-  </div>
-
-  <!-- ==========================================
-       AUTHENTICATION SCREEN
-       ========================================== -->
-
-  <main
-    id="authScreen"
-    class="hidden min-h-screen flex items-center justify-center p-5"
-  >
-    <div class="panel w-full max-w-md p-6 sm:p-8">
-
-      <div class="text-center mb-7">
-        <div class="text-4xl mb-3">📐</div>
-
-        <h1 class="text-2xl font-extrabold">
-          Math Class Portal
-        </h1>
-
-        <p class="muted text-sm mt-2">
-          Your classroom, organised in one place.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-2 gap-2 mb-5">
-        <button
-          id="loginTab"
-          type="button"
-          class="btn btn-primary"
-          onclick="showAuthMode('login')"
-        >
-          Sign In
-        </button>
-
-        <button
-          id="registerTab"
-          type="button"
-          class="btn btn-secondary"
-          onclick="showAuthMode('register')"
-        >
-          Create Account
-        </button>
-      </div>
-
-      <form id="authForm" class="space-y-4">
-
-        <div id="authNameWrap" class="hidden">
-          <label for="authName" class="block text-sm mb-2">
-            Your display name
-          </label>
-
-          <input
-            id="authName"
-            class="field"
-            maxlength="50"
-            autocomplete="name"
-            placeholder="Enter your name"
-          >
-        </div>
-
-        <div>
-          <label for="authEmail" class="block text-sm mb-2">
-            Email address
-          </label>
-
-          <input
-            id="authEmail"
-            class="field"
-            type="email"
-            autocomplete="email"
-            required
-            placeholder="you@example.com"
-          >
-        </div>
-
-        <div>
-          <label for="authPassword" class="block text-sm mb-2">
-            Password
-          </label>
-
-          <input
-            id="authPassword"
-            class="field"
-            type="password"
-            autocomplete="current-password"
-            minlength="6"
-            required
-            placeholder="At least 6 characters"
-          >
-        </div>
-
-        <button
-          id="authSubmit"
-          type="submit"
-          class="btn btn-primary w-full"
-        >
-          Sign In
-        </button>
-
-        <button
-          type="button"
-          id="forgotPassword"
-          class="text-sm muted w-full text-center"
-        >
-          Forgot password?
-        </button>
-
-        <p
-          id="authError"
-          class="text-sm text-red-300"
-          role="alert"
-        ></p>
-
-      </form>
-
-      <p class="muted text-xs mt-5 text-center">
-        Secure sign-in for your mathematics classroom.
-      </p>
-
-    </div>
-  </main>
-
-  <!-- ==========================================
-       MAIN APPLICATION SHELL
-       ========================================== -->
-
-  <div id="appScreen" class="hidden min-h-screen">
-
-    <header
-      class="border-b px-4 sm:px-6 py-4"
-      style="border-color:var(--border)"
-    >
-      <div class="max-w-7xl mx-auto flex justify-between items-center gap-3">
-
-        <div>
-          <h1 class="text-xl font-extrabold">
-            📐 Math Class Portal
-          </h1>
-
-          <p class="muted text-xs mt-1">
-            Learn · Practise · Improve
-          </p>
-        </div>
-
-        <div class="flex items-center gap-3">
-
-          <div class="text-right hidden sm:block">
-            <p id="headerName" class="font-semibold text-sm">
-              Student
-            </p>
-
-            <span id="headerRole" class="badge">
-              STUDENT
-            </span>
-          </div>
-
-          <button
-            class="btn btn-secondary text-sm"
-            type="button"
-            onclick="logout()"
-          >
-            Sign Out
-          </button>
-
-        </div>
+      <div>
+        <h1>Math<span>Space</span></h1>
+        <p>YOUR CLASSROOM. YOUR PROGRESS.</p>
       </div>
     </header>
 
-    <div class="main-layout max-w-7xl mx-auto p-4 sm:p-6 gap-6">
+    <!-- Authentication screen -->
+    <section id="authScreen" class="auth-layout">
 
-      <aside class="panel p-3 mb-5 md:mb-0 h-fit">
-
-        <div class="px-3 py-3 mb-2">
-          <p class="text-xs muted uppercase tracking-wider">
-            Workspace
-          </p>
-
-          <p id="sidebarName" class="font-bold mt-1">
-            Welcome
-          </p>
+      <div class="welcome-panel">
+        <div class="eyebrow">
+          <span class="status-dot"></span>
+          YOUR LEARNING SPACE
         </div>
 
-        <nav class="space-y-1">
+        <h2>
+          Mathematics,<br>
+          <span>made meaningful.</span>
+        </h2>
 
-          <button
-            class="nav-btn active"
-            data-page="announcements"
-            onclick="navigate('announcements')"
-          >
-            📢 Notice Board
-          </button>
+        <p class="welcome-description">
+          Stay organised, track your practice, ask questions,
+          and learn together in one dedicated classroom.
+        </p>
 
-          <button
-            class="nav-btn"
-            data-page="study"
-            onclick="navigate('study')"
-          >
-            📚 Study Logs
-          </button>
+        <div class="feature-list">
 
-          <button
-            class="nav-btn"
-            data-page="chat"
-            onclick="navigate('chat')"
-          >
-            💬 Class Chat
-          </button>
+          <div class="feature-item">
+            <div class="feature-icon">01</div>
+            <div>
+              <strong>Track your progress</strong>
+              <p>Keep your daily study records organised.</p>
+            </div>
+          </div>
 
-          <button
-            class="nav-btn"
-            data-page="doubts"
-            onclick="navigate('doubts')"
-          >
-            ❓ Doubt Inbox
-          </button>
+          <div class="feature-item">
+            <div class="feature-icon">02</div>
+            <div>
+              <strong>Learn together</strong>
+              <p>Connect with your teacher and classmates.</p>
+            </div>
+          </div>
 
-          <button
-            class="nav-btn"
-            data-page="profile"
-            onclick="navigate('profile')"
-          >
-            👤 My Profile
-          </button>
+          <div class="feature-item">
+            <div class="feature-icon">03</div>
+            <div>
+              <strong>Stay informed</strong>
+              <p>Never miss an important classroom notice.</p>
+            </div>
+          </div>
 
-        </nav>
+        </div>
+      </div>
 
-        <div class="mt-5 p-3 rounded-xl" style="background:#0b1222">
-          <p class="muted text-xs">Your role</p>
+      <!-- Login card -->
+      <div class="auth-card">
 
-          <p id="sidebarRole" class="font-bold mt-1">
-            Student
-          </p>
+        <div class="card-heading">
+          <div class="card-symbol">✳</div>
+
+          <div>
+            <h2 id="formTitle">Welcome back</h2>
+            <p id="formSubtitle">Sign in to continue learning.</p>
+          </div>
         </div>
 
-      </aside>
+        <!-- Authentication tabs -->
+        <div class="auth-tabs">
+          <button
+            id="loginTab"
+            type="button"
+            class="auth-tab active"
+          >
+            Sign In
+          </button>
 
-      <main class="min-w-0">
+          <button
+            id="registerTab"
+            type="button"
+            class="auth-tab"
+          >
+            Create Account
+          </button>
+        </div>
 
-        <!-- NOTICE BOARD -->
+        <form id="authForm">
 
-        <section id="page-announcements" class="page space-y-5">
+          <div id="nameGroup" class="form-group hidden">
+            <label for="displayName">Your name</label>
 
-          <div>
-            <h2 class="section-title">Notice Board</h2>
-
-            <p class="muted">
-              Important updates and class announcements.
-            </p>
+            <input
+              id="displayName"
+              type="text"
+              maxlength="50"
+              autocomplete="name"
+              placeholder="Enter your full name"
+            >
           </div>
 
-          <div id="noticeComposer" class="panel p-5 hidden">
+          <div class="form-group">
+            <label for="email">Email address</label>
 
-            <h3 class="font-bold mb-4">
-              Publish an announcement
-            </h3>
+            <input
+              id="email"
+              type="email"
+              autocomplete="email"
+              required
+              placeholder="you@example.com"
+            >
+          </div>
 
-            <form id="noticeForm" class="space-y-3">
-
-              <input
-                id="noticeTitle"
-                class="field"
-                maxlength="120"
-                required
-                placeholder="Announcement title"
-              >
-
-              <textarea
-                id="noticeBody"
-                class="field"
-                rows="4"
-                maxlength="5000"
-                required
-                placeholder="Write your announcement..."
-              ></textarea>
-
-              <div class="grid sm:grid-cols-2 gap-3">
-
-                <select id="noticePriority" class="field">
-                  <option value="normal">Normal priority</option>
-                  <option value="important">Important</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-
-                <input
-                  id="noticeFile"
-                  type="file"
-                  class="field"
-                  accept="image/*,.pdf,.doc,.docx"
-                >
-
-              </div>
+          <div class="form-group">
+            <div class="label-row">
+              <label for="password">Password</label>
 
               <button
-                id="noticePublish"
-                class="btn btn-primary"
-                type="submit"
+                id="forgotPassword"
+                type="button"
+                class="text-button"
               >
-                Publish Notice
+                Forgot password?
               </button>
-
-            </form>
-          </div>
-
-          <div id="noticeList" class="space-y-3">
-            <p class="muted">Loading notices...</p>
-          </div>
-
-        </section>
-
-        <!-- STUDY LOGS -->
-
-        <section id="page-study" class="page hidden space-y-5">
-
-          <div>
-            <h2 class="section-title">Study Logs</h2>
-
-            <p class="muted">
-              Record your practice and submit proof of your work.
-            </p>
-          </div>
-
-          <div id="studySubmitPanel" class="panel p-5">
-
-            <h3 class="font-bold mb-4">
-              Submit today's study log
-            </h3>
-
-            <form id="studyForm" class="space-y-3">
-
-              <input
-                id="studyTopic"
-                class="field"
-                maxlength="150"
-                required
-                placeholder="Topic studied"
-              >
-
-              <input
-                id="studyMinutes"
-                class="field"
-                type="number"
-                min="1"
-                max="1440"
-                required
-                placeholder="Minutes studied"
-              >
-
-              <textarea
-                id="studyNotes"
-                class="field"
-                rows="3"
-                maxlength="2000"
-                placeholder="What did you practise today?"
-              ></textarea>
-
-              <div>
-                <label class="text-sm block mb-2" for="studyProof">
-                  Proof image (optional)
-                </label>
-
-                <input
-                  id="studyProof"
-                  class="field"
-                  type="file"
-                  accept="image/*"
-                >
-
-                <p class="muted text-xs mt-2">
-                  Images will be compressed before upload.
-                </p>
-              </div>
-
-              <button
-                id="studySubmit"
-                type="submit"
-                class="btn btn-primary"
-              >
-                Submit Study Log
-              </button>
-
-            </form>
-          </div>
-
-          <div class="panel p-5">
-            <h3 class="font-bold mb-3">My study history</h3>
-
-            <div id="myStudyLogs" class="space-y-3">
-              <p class="muted">Loading your study logs...</p>
             </div>
-          </div>
 
-          <div id="teacherStudyPanel" class="panel p-5 hidden">
-            <h3 class="font-bold mb-3">Student submissions</h3>
-
-            <div id="teacherStudyLogs" class="space-y-3">
-              <p class="muted">Loading submissions...</p>
-            </div>
-          </div>
-
-        </section>
-
-        <!-- CLASS CHAT -->
-
-        <section id="page-chat" class="page hidden space-y-5">
-
-          <div>
-            <h2 class="section-title">Class Chat</h2>
-
-            <p class="muted">
-              Discuss mathematics with your class.
-            </p>
-          </div>
-
-          <div class="panel p-4">
-
-            <div
-              id="chatMessages"
-              class="space-y-2 overflow-y-auto"
-              style="height:420px"
+            <input
+              id="password"
+              type="password"
+              minlength="6"
+              autocomplete="current-password"
+              required
+              placeholder="Enter your password"
             >
-              <p class="muted">Connecting to class chat...</p>
-            </div>
-
-            <form id="chatForm" class="flex gap-2 mt-4">
-
-              <input
-                id="chatInput"
-                class="field"
-                maxlength="1500"
-                required
-                placeholder="Write a message..."
-              >
-
-              <button id="chatSend" class="btn btn-primary" type="submit">
-                Send
-              </button>
-
-            </form>
           </div>
 
-        </section>
+          <button
+            id="submitButton"
+            type="submit"
+            class="primary-button"
+          >
+            <span id="submitText">Sign In</span>
+            <span aria-hidden="true">→</span>
+          </button>
 
-        <!-- DOUBT INBOX -->
+          <div
+            id="authMessage"
+            class="message hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
 
-        <section id="page-doubts" class="page hidden space-y-5">
+        </form>
 
-          <div>
-            <h2 class="section-title">Doubt Inbox</h2>
+        <div class="security-note">
+          <span>🔒</span>
+          <span>Your account is protected by Firebase Authentication.</span>
+        </div>
 
-            <p class="muted">
-              Ask questions and receive help from your teacher.
-            </p>
+      </div>
+    </section>
+
+    <!-- Authenticated application -->
+    <section id="dashboardScreen" class="dashboard hidden">
+
+      <div class="dashboard-top">
+
+        <div>
+          <div class="eyebrow">
+            <span class="status-dot"></span>
+            CLASSROOM CONNECTED
           </div>
 
-          <div id="teacherDoubtPanel" class="hidden">
-            <div class="panel p-4">
+          <h2>
+            Welcome, <span id="userName">Student</span>.
+          </h2>
 
-              <h3 class="font-bold mb-3">
-                Student conversations
-              </h3>
+          <p>Your learning journey starts here.</p>
+        </div>
 
-              <div id="doubtStudentList" class="space-y-2">
-                <p class="muted">Loading conversations...</p>
-              </div>
+        <button id="logoutButton" class="secondary-button">
+          Sign Out ↗
+        </button>
 
-            </div>
-          </div>
+      </div>
 
-          <div class="panel p-4">
+      <div class="profile-summary">
 
-            <div class="flex justify-between gap-3 items-center mb-4">
+        <div class="avatar" id="userAvatar">S</div>
 
-              <h3 id="doubtThreadTitle" class="font-bold">
-                My conversation
-              </h3>
+        <div>
+          <p class="summary-label">SIGNED-IN ACCOUNT</p>
+          <h3 id="userEmail">Loading...</h3>
+          <span id="userRole" class="role-badge">STUDENT</span>
+        </div>
 
-              <span id="doubtStatus" class="badge">
-                Open
-              </span>
+      </div>
 
-            </div>
+      <div class="dashboard-message">
+        <div class="welcome-icon">✓</div>
 
-            <div
-              id="doubtMessages"
-              class="space-y-2 overflow-y-auto"
-              style="height:350px"
-            >
-              <p class="muted">Loading messages...</p>
-            </div>
+        <div>
+          <h3>You're signed in successfully.</h3>
 
-            <form id="doubtForm" class="flex gap-2 mt-4">
+          <p>
+            Authentication is working. We'll add the Notice Board,
+            Study Logs, Class Chat, Doubt Inbox, and Profile tools
+            after this foundation is verified.
+          </p>
+        </div>
+      </div>
 
-              <input
-                id="doubtInput"
-                class="field"
-                maxlength="2000"
-                required
-                placeholder="Ask or answer a question..."
-              >
+      <p id="dashboardMessage" class="system-message">
+        Your account is ready.
+      </p>
 
-              <button id="doubtSend" class="btn btn-primary" type="submit">
-                Send
-              </button>
+    </section>
 
-            </form>
+    <!-- Footer -->
+    <footer class="footer">
+      <span>MathSpace</span>
+      <span>Built for better learning.</span>
+    </footer>
 
-          </div>
+  </main>
 
-        </section>
-
-        <!-- PROFILE -->
-
-        <section id="page-profile" class="page hidden space-y-5">
-
-          <div>
-            <h2 class="section-title">My Profile</h2>
-
-            <p class="muted">
-              Manage your classroom information.
-            </p>
-          </div>
-
-          <div class="panel p-5">
-
-            <form id="profileForm" class="space-y-4">
-
-              <div>
-                <label for="profileName" class="block text-sm mb-2">
-                  Display name
-                </label>
-
-                <input
-                  id="profileName"
-                  class="field"
-                  maxlength="50"
-                  required
-                >
-              </div>
-
-              <div>
-                <label for="profileRoll" class="block text-sm mb-2">
-                  Roll number
-                </label>
-
-                <input
-                  id="profileRoll"
-                  class="field"
-                  type="number"
-                  min="0"
-                  max="9999"
-                >
-              </div>
-
-              <div>
-                <label for="profileEmail" class="block text-sm mb-2">
-                  Email
-                </label>
-
-                <input id="profileEmail" class="field" disabled>
-              </div>
-
-              <div>
-                <label for="profileRole" class="block text-sm mb-2">
-                  Detected role
-                </label>
-
-                <input id="profileRole" class="field" disabled>
-              </div>
-
-              <button class="btn btn-primary" type="submit">
-                Save Profile
-              </button>
-
-            </form>
-
-          </div>
-
-          <div id="adminInfo" class="panel p-5 hidden">
-
-            <h3 class="font-bold mb-2">
-              Administrator Access
-            </h3>
-
-            <p class="muted text-sm">
-              Administrator access depends on the configured administrator
-              UID list. Firebase Security Rules must independently enforce
-              administrator permissions.
-            </p>
-
-          </div>
-
-        </section>
-
-      </main>
-    </div>
-  </div>
-
-  <!-- TOAST NOTIFICATIONS -->
-
-  <div
-    id="toast"
-    class="hidden"
-    role="status"
-    aria-live="polite"
-  ></div>
+</body>
+</html>
