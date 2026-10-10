@@ -1,10 +1,16 @@
 // ============================================================
 // MATH CLASS — VIRTUAL LEARNING PORTAL
-// File: app.js
-// Firebase SDK: 10.5.0 Modular
+// Main application controller
+// Firebase SDK 10.5.0 Modular
 // ============================================================
 
-import { auth, db } from "./firebase-config.js";
+import {
+  auth,
+  db,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
+} from "./firebase-config.js";
 
 import {
   createUserWithEmailAndPassword,
@@ -19,7 +25,6 @@ import {
   ref,
   get,
   set,
-  update,
   onValue
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
 
@@ -29,7 +34,8 @@ import {
 
 const CONFIG = {
   profilePath: "users",
-  loadingTimeout: 12000,
+  loadingTimeout: 15000,
+  adminUID: "YNdqDJRyZ1hFAtqrJeZJYScldfc2",
   allowedRoles: ["student", "teacher", "admin"],
   defaultRole: "student"
 };
@@ -43,12 +49,16 @@ const state = {
   profile: null,
   role: null,
   initialized: false,
-  loading: false,
   online: navigator.onLine,
   currentPage: "dashboard",
-  unsubscribeConnection: null,
-  authGeneration: 0
+  authGeneration: 0,
+  roleModule: null,
+  roleModuleName: null,
+  connectionUnsubscribe: null,
+  startupError: null
 };
+
+let authListenerStarted = false;
 
 // ============================================================
 // DOM HELPERS
@@ -63,7 +73,10 @@ const $$ = (selector, root = document) =>
 function findElement(...selectors) {
   for (const selector of selectors) {
     const element = $(selector);
-    if (element) return element;
+
+    if (element) {
+      return element;
+    }
   }
 
   return null;
@@ -74,115 +87,120 @@ function findElement(...selectors) {
 // ============================================================
 
 function withTimeout(promise, timeout = CONFIG.loadingTimeout) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("The request took too long. Please try again."));
-      }, timeout);
-    })
-  ]);
-}
+  let timer;
 
-function escapeHTML(value = "") {
-  return String(value).replace(/[&<>"']/g, character => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[character]);
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = window.setTimeout(() => {
+      reject(
+        new Error(
+          "The request took too long. Check your connection and try again."
+        )
+      );
+    }, timeout);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    window.clearTimeout(timer);
+  });
 }
 
 // ============================================================
-// LOADING SCREEN
+// LOADING SCREEN AND STARTUP RECOVERY
 // ============================================================
 
-function showLoading(message = "Loading your classroom...") {
-  state.loading = true;
-
-  const loader = findElement(
-    "#loadingScreen",
-    "#globalLoader",
-    "#appLoader",
-    "[data-loading-screen]"
-  );
+function showLoading(message = "Preparing your classroom...") {
+  const loader = $("#appLoader");
+  const messageElement = $("#loaderMessage");
+  const recovery = $("#loaderRecovery");
 
   if (loader) {
     loader.hidden = false;
     loader.style.display = "flex";
-    loader.setAttribute("aria-live", "polite");
-
-    const text = findElement(
-      "#loadingText",
-      "#loaderText",
-      "[data-loading-text]"
-    );
-
-    if (text) text.textContent = message;
   }
 
-  document.body.classList.add("app-loading");
+  if (messageElement) {
+    messageElement.textContent = message;
+    messageElement.hidden = false;
+  }
+
+  if (recovery) {
+    recovery.hidden = true;
+  }
 }
 
 function hideLoading() {
-  state.loading = false;
-
-  const loader = findElement(
-    "#loadingScreen",
-    "#globalLoader",
-    "#appLoader",
-    "[data-loading-screen]"
-  );
+  const loader = $("#appLoader");
 
   if (loader) {
     loader.hidden = true;
     loader.style.display = "none";
   }
-
-  document.body.classList.remove("app-loading");
 }
 
-// Always release the loader if initialization fails.
-window.setTimeout(() => {
-  if (state.loading) {
-    hideLoading();
+function markApplicationStarted() {
+  state.initialized = true;
+  hideLoading();
 
-    if (!state.initialized) {
-      showFatalError(
-        "The classroom could not finish loading. Check your connection and refresh the page."
-      );
-    }
+  // Cancel the independent 12-second recovery timer
+  // defined in index.html.
+  if (window.MathClassBoot?.markStarted) {
+    window.MathClassBoot.markStarted();
   }
-}, CONFIG.loadingTimeout + 3000);
+}
+
+function showStartupError(message) {
+  state.startupError = message;
+
+  const loader = $("#appLoader");
+  const messageElement = $("#loaderMessage");
+  const recovery = $("#loaderRecovery");
+  const errorElement = $("#loaderErrorMessage");
+
+  if (loader) {
+    loader.hidden = false;
+    loader.style.display = "flex";
+  }
+
+  if (messageElement) {
+    messageElement.hidden = true;
+  }
+
+  if (recovery) {
+    recovery.hidden = false;
+  }
+
+  if (errorElement) {
+    errorElement.textContent = message;
+  }
+
+  if (window.MathClassBoot?.showRecovery) {
+    window.MathClassBoot.showRecovery(message);
+  }
+}
 
 // ============================================================
 // NOTIFICATIONS
 // ============================================================
 
 function ensureToastContainer() {
-  let container = findElement(
-    "#toastContainer",
-    "#toast-container",
-    "[data-toast-container]"
-  );
+  let container = $("#toastContainer");
 
   if (!container) {
     container = document.createElement("div");
     container.id = "toastContainer";
-    container.setAttribute("aria-live", "polite");
-    container.setAttribute("aria-atomic", "false");
 
     Object.assign(container.style, {
       position: "fixed",
-      right: "20px",
-      bottom: "20px",
-      zIndex: "10000",
+      right: "16px",
+      bottom: "16px",
+      zIndex: "100000",
       display: "flex",
       flexDirection: "column",
-      gap: "10px",
+      gap: "8px",
       maxWidth: "min(380px, calc(100vw - 32px))"
     });
+
+    container.setAttribute("aria-live", "polite");
 
     document.body.appendChild(container);
   }
@@ -194,48 +212,31 @@ function toast(message, type = "info", duration = 3500) {
   const container = ensureToastContainer();
   const item = document.createElement("div");
 
-  const styles = {
-    success: {
-      background: "#F0FDF4",
-      color: "#166534",
-      border: "#BBF7D0"
-    },
-    error: {
-      background: "#FEF2F2",
-      color: "#991B1B",
-      border: "#FECACA"
-    },
-    warning: {
-      background: "#FFFBEB",
-      color: "#92400E",
-      border: "#FDE68A"
-    },
-    info: {
-      background: "#EFF6FF",
-      color: "#1E40AF",
-      border: "#BFDBFE"
-    }
+  const palettes = {
+    success: ["#F0FDF4", "#166534", "#BBF7D0"],
+    error: ["#FEF2F2", "#991B1B", "#FECACA"],
+    warning: ["#FFFBEB", "#92400E", "#FDE68A"],
+    info: ["#EFF6FF", "#1E40AF", "#BFDBFE"]
   };
 
-  const palette = styles[type] || styles.info;
+  const palette = palettes[type] || palettes.info;
 
   Object.assign(item.style, {
     padding: "13px 16px",
-    borderRadius: "10px",
-    border: `1px solid ${palette.border}`,
-    background: palette.background,
-    color: palette.color,
-    boxShadow: "0 8px 24px rgba(15,23,42,.08)",
+    borderRadius: "12px",
+    border: `1px solid ${palette[2]}`,
+    background: palette[0],
+    color: palette[1],
+    boxShadow: "0 8px 25px rgba(15,23,42,.10)",
     fontSize: "14px",
     lineHeight: "1.5",
-    fontWeight: "500",
     overflowWrap: "anywhere",
     opacity: "0",
     transform: "translateY(8px)",
-    transition: "opacity 200ms ease, transform 200ms ease"
+    transition: "opacity .2s ease, transform .2s ease"
   });
 
-  item.textContent = message;
+  item.textContent = String(message);
   container.appendChild(item);
 
   requestAnimationFrame(() => {
@@ -252,243 +253,274 @@ function toast(message, type = "info", duration = 3500) {
 }
 
 // ============================================================
-// ERROR HANDLING
+// ERROR MESSAGES
 // ============================================================
 
 function readableError(error) {
-  const code = error?.code || "";
-
   const messages = {
-    "auth/invalid-email": "Please enter a valid email address.",
-    "auth/user-not-found": "No account was found with this email.",
-    "auth/wrong-password": "Incorrect email or password.",
-    "auth/invalid-credential": "Incorrect email or password.",
-    "auth/email-already-in-use": "An account with this email already exists.",
-    "auth/weak-password": "Your password must be at least 6 characters.",
-    "auth/too-many-requests": "Too many attempts. Please try again later.",
-    "auth/network-request-failed": "Network error. Check your internet connection.",
-    "auth/operation-not-allowed": "This sign-in method is not enabled in Firebase.",
-    "auth/invalid-api-key": "Firebase configuration is invalid.",
-    "PERMISSION_DENIED": "Access denied by Firebase security rules."
+    "auth/invalid-email":
+      "Please enter a valid email address.",
+
+    "auth/user-not-found":
+      "No account was found with that email.",
+
+    "auth/wrong-password":
+      "Incorrect email or password.",
+
+    "auth/invalid-credential":
+      "Incorrect email or password.",
+
+    "auth/email-already-in-use":
+      "An account with this email already exists.",
+
+    "auth/weak-password":
+      "Your password must contain at least 6 characters.",
+
+    "auth/too-many-requests":
+      "Too many attempts. Please try again later.",
+
+    "auth/network-request-failed":
+      "Network error. Check your internet connection.",
+
+    "auth/operation-not-allowed":
+      "Email and password sign-in is not enabled.",
+
+    "auth/invalid-api-key":
+      "The Firebase API key is invalid.",
+
+    "auth/unauthorized-domain":
+      "This website domain is not authorized in Firebase.",
+
+    "PERMISSION_DENIED":
+      "Firebase denied access. Check your database rules.",
+
+    "permission_denied":
+      "Firebase denied access. Check your database rules."
   };
 
-  return messages[code] ||
+  return messages[error?.code] ||
     error?.message ||
     "Something went wrong. Please try again.";
 }
 
-function showFatalError(message) {
-  let panel = findElement("#fatalError", "[data-fatal-error]");
-
-  if (!panel) {
-    panel = document.createElement("section");
-    panel.id = "fatalError";
-
-    Object.assign(panel.style, {
-      maxWidth: "520px",
-      margin: "40px auto",
-      padding: "24px",
-      borderRadius: "12px",
-      border: "1px solid #FECACA",
-      background: "#FFFFFF",
-      color: "#111827",
-      textAlign: "center"
-    });
-
-    document.body.appendChild(panel);
-  }
-
-  panel.replaceChildren();
-
-  const heading = document.createElement("h2");
-  heading.textContent = "Unable to load classroom";
-
-  const description = document.createElement("p");
-  description.textContent = message;
-
-  const retry = document.createElement("button");
-  retry.type = "button";
-  retry.textContent = "Try again";
-
-  Object.assign(retry.style, {
-    border: "0",
-    borderRadius: "8px",
-    padding: "12px 18px",
-    background: "#4F46E5",
-    color: "#FFFFFF",
-    cursor: "pointer"
-  });
-
-  retry.addEventListener("click", () => location.reload());
-
-  panel.append(heading, description, retry);
-  panel.hidden = false;
-}
-
 // ============================================================
-// CONNECTION STATUS
+// AUTHENTICATION VIEW
 // ============================================================
 
-function setupConnectionMonitor() {
-  const banner = ensureConnectionBanner();
-
-  function updateConnectionStatus(online) {
-    state.online = online;
-
-    banner.hidden = online;
-    banner.textContent = online
-      ? ""
-      : "Connection lost. Reconnecting to Firebase...";
-
-    document.body.classList.toggle("offline", !online);
-
-    window.dispatchEvent(new CustomEvent("mathclass:connection", {
-      detail: { online }
-    }));
-  }
-
-  window.addEventListener("online", () => {
-    updateConnectionStatus(true);
-    toast("Connection restored.", "success");
-  });
-
-  window.addEventListener("offline", () => {
-    updateConnectionStatus(false);
-    toast("You are offline. Changes may not be saved.", "warning");
-  });
-
-  updateConnectionStatus(navigator.onLine);
-}
-
-function ensureConnectionBanner() {
-  let banner = findElement(
-    "#connectionBanner",
-    "[data-connection-banner]"
-  );
-
-  if (!banner) {
-    banner = document.createElement("div");
-    banner.id = "connectionBanner";
-
-    Object.assign(banner.style, {
-      position: "fixed",
-      top: "0",
-      left: "0",
-      right: "0",
-      zIndex: "9999",
-      padding: "10px 16px",
-      textAlign: "center",
-      fontSize: "13px",
-      background: "#FEF3C7",
-      color: "#92400E"
-    });
-
-    document.body.prepend(banner);
-  }
-
-  banner.hidden = true;
-  return banner;
-}
-
-// ============================================================
-// USER PROFILE
-// ============================================================
-
-async function getUserProfile(user) {
-  const snapshot = await withTimeout(
-    get(ref(db, `${CONFIG.profilePath}/${user.uid}`))
-  );
-
-  if (snapshot.exists()) {
-    return snapshot.val();
-  }
-
-  // Existing account without a profile:
-  // create a basic student profile.
-  const profile = {
-    uid: user.uid,
-    name: user.displayName || "Student",
-    email: user.email || "",
-    role: CONFIG.defaultRole,
-    createdAt: Date.now(),
-    updatedAt: Date.now()
+function showAuthPanel(panelName = "login") {
+  const panels = {
+    login: $("#loginPanel"),
+    register: $("#registerPanel"),
+    forgot: $("#forgotPasswordPanel")
   };
 
-  await withTimeout(
-    set(ref(db, `${CONFIG.profilePath}/${user.uid}`), profile)
-  );
+  Object.entries(panels).forEach(([name, panel]) => {
+    if (!panel) return;
 
-  return profile;
+    panel.hidden = name !== panelName;
+  });
+
+  const authView = $("#authView");
+
+  if (authView) {
+    authView.hidden = false;
+    authView.style.display = "";
+  }
+
+  const appShell = $("#appShell");
+
+  if (appShell) {
+    appShell.hidden = true;
+  }
+
+  document.body.classList.add("unauthenticated");
+  document.body.classList.remove("authenticated");
 }
 
-function normalizeRole(profile) {
-  const role = String(profile?.role || CONFIG.defaultRole)
-    .trim()
-    .toLowerCase();
+function showAuthView() {
+  showAuthPanel("login");
 
-  return CONFIG.allowedRoles.includes(role)
-    ? role
-    : CONFIG.defaultRole;
+  const authView = $("#authView");
+  const appShell = $("#appShell");
+
+  if (authView) {
+    authView.hidden = false;
+  }
+
+  if (appShell) {
+    appShell.hidden = true;
+  }
+
+  closeNavigationDrawer();
+}
+
+function showApplicationView() {
+  const authView = $("#authView");
+  const appShell = $("#appShell");
+
+  if (authView) {
+    authView.hidden = true;
+    authView.style.display = "none";
+  }
+
+  if (appShell) {
+    appShell.hidden = false;
+    appShell.style.display = "";
+  }
+
+  document.body.classList.remove("unauthenticated");
+  document.body.classList.add("authenticated");
 }
 
 // ============================================================
-// AUTHENTICATION FORM HELPERS
+// FORM HELPERS
 // ============================================================
+
+function fieldValue(form, selectors) {
+  for (const selector of selectors) {
+    const field = form.querySelector(selector);
+
+    if (field) {
+      return String(field.value || "").trim();
+    }
+  }
+
+  return "";
+}
 
 function setFormBusy(form, busy) {
   if (!form) return;
 
   form.setAttribute("aria-busy", String(busy));
 
-  $$('button[type="submit"], input[type="submit"]', form)
-    .forEach(button => {
-      if (busy) {
-        if (!button.dataset.originalText) {
-          button.dataset.originalText =
-            button.textContent || button.value || "Submit";
-        }
-
-        button.disabled = true;
-
-        if (button.tagName === "INPUT") {
-          button.value = "Please wait...";
-        } else {
-          button.textContent = "Please wait...";
-        }
-      } else {
-        button.disabled = false;
-
-        const original = button.dataset.originalText;
-
-        if (original) {
-          if (button.tagName === "INPUT") {
-            button.value = original;
-          } else {
-            button.textContent = original;
-          }
-        }
+  $$('button[type="submit"]', form).forEach(button => {
+    if (busy) {
+      if (!button.dataset.originalHTML) {
+        button.dataset.originalHTML = button.innerHTML;
       }
-    });
+
+      button.disabled = true;
+
+      const label = $(".button-label", button);
+
+      if (label) {
+        label.textContent = "Please wait...";
+      } else {
+        button.textContent = "Please wait...";
+      }
+    } else {
+      button.disabled = false;
+
+      if (button.dataset.originalHTML) {
+        button.innerHTML = button.dataset.originalHTML;
+      }
+    }
+  });
 }
 
-function getField(form, names) {
-  for (const name of names) {
-    const field =
-      form.querySelector(`[name="${name}"]`) ||
-      form.querySelector(`#${name}`);
+function showFormMessage(selector, message, type = "error") {
+  const element = $(selector);
 
-    if (field) return field;
+  if (!element) {
+    toast(message, type);
+    return;
   }
 
-  return null;
+  element.textContent = message;
+  element.hidden = false;
+
+  element.classList.toggle("form-message-error", type === "error");
+  element.classList.toggle("form-message-success", type === "success");
 }
 
-function getFormValue(form, names) {
-  return String(getField(form, names)?.value || "").trim();
+function clearFormMessage(selector) {
+  const element = $(selector);
+
+  if (element) {
+    element.textContent = "";
+    element.hidden = true;
+  }
 }
 
 // ============================================================
-// REGISTER
+// CREATE AND LOAD USER PROFILES
+// ============================================================
+
+async function getUserProfile(user) {
+  const profileRef = ref(
+    db,
+    `${CONFIG.profilePath}/${user.uid}`
+  );
+
+  const snapshot = await withTimeout(get(profileRef));
+
+  if (snapshot.exists()) {
+    const existing = snapshot.val();
+
+    const role = String(existing.role || "student").toLowerCase();
+
+    if (!CONFIG.allowedRoles.includes(role)) {
+      throw new Error("This account has an invalid role configuration.");
+    }
+
+    if (
+      existing.status === "suspended" ||
+      existing.status === "disabled" ||
+      existing.disabled === true ||
+      existing.suspended === true
+    ) {
+      throw new Error(
+        "This account has been suspended. Contact your administrator."
+      );
+    }
+
+    return {
+      ...existing,
+      uid: user.uid,
+      name:
+        existing.name ||
+        existing.displayName ||
+        user.displayName ||
+        user.email?.split("@")[0] ||
+        "Student",
+      displayName:
+        existing.displayName ||
+        existing.name ||
+        user.displayName ||
+        "Student",
+      email: existing.email || user.email || "",
+      role,
+      status: existing.status || "active"
+    };
+  }
+
+  // New profiles default to student.
+  // The configured administrator can receive their admin profile.
+  const isConfiguredAdmin = user.uid === CONFIG.adminUID;
+
+  const name =
+    user.displayName ||
+    user.email?.split("@")[0] ||
+    "Student";
+
+  const profile = {
+    uid: user.uid,
+    name,
+    displayName: name,
+    email: user.email || "",
+    role: isConfiguredAdmin ? "admin" : "student",
+    status: "active",
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await withTimeout(set(profileRef, profile));
+
+  return profile;
+}
+
+// ============================================================
+// REGISTRATION
 // ============================================================
 
 async function handleRegister(event) {
@@ -496,30 +528,55 @@ async function handleRegister(event) {
 
   const form = event.currentTarget;
 
-  const name = getFormValue(form, [
-    "name",
-    "fullName",
-    "displayName",
-    "studentName"
+  clearFormMessage("#registerFormMessage");
+
+  const name = fieldValue(form, [
+    '[name="displayName"]',
+    "#registerName",
+    '[name="name"]'
   ]);
 
-  const email = getFormValue(form, ["email"]);
-  const password = getField(form, ["password"])?.value || "";
-  const confirmPassword =
-    getField(form, ["confirmPassword", "passwordConfirm"])?.value;
+  const email = fieldValue(form, [
+    '[name="email"]',
+    "#registerEmail"
+  ]).toLowerCase();
 
-  if (!email || !password) {
-    toast("Please enter your email and password.", "warning");
+  const password = fieldValue(form, [
+    '[name="password"]',
+    "#registerPassword"
+  ]);
+
+  const termsAccepted = $("#acceptTerms")?.checked;
+
+  if (name.length < 2) {
+    showFormMessage(
+      "#registerFormMessage",
+      "Please enter your full name."
+    );
     return;
   }
 
-  if (password.length < 6) {
-    toast("Password must contain at least 6 characters.", "warning");
+  if (!email) {
+    showFormMessage(
+      "#registerFormMessage",
+      "Please enter your email address."
+    );
     return;
   }
 
-  if (confirmPassword !== undefined && password !== confirmPassword) {
-    toast("Your passwords do not match.", "warning");
+  if (password.length < 8) {
+    showFormMessage(
+      "#registerFormMessage",
+      "Your password must contain at least 8 characters."
+    );
+    return;
+  }
+
+  if (!termsAccepted) {
+    showFormMessage(
+      "#registerFormMessage",
+      "Please accept the classroom guidelines."
+    );
     return;
   }
 
@@ -530,37 +587,46 @@ async function handleRegister(event) {
       createUserWithEmailAndPassword(auth, email, password)
     );
 
-    if (name) {
-      await updateProfile(credential.user, {
-        displayName: name
-      });
-    }
+    await updateProfile(credential.user, {
+      displayName: name
+    });
 
     const profile = {
       uid: credential.user.uid,
-      name: name || "Student",
+      name,
+      displayName: name,
       email: credential.user.email || email,
-      role: CONFIG.defaultRole,
+      role: "student",
+      status: "active",
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
 
     await withTimeout(
-      set(ref(db, `${CONFIG.profilePath}/${credential.user.uid}`), profile)
+      set(
+        ref(db, `${CONFIG.profilePath}/${credential.user.uid}`),
+        profile
+      )
     );
 
     toast("Your account has been created successfully.", "success");
 
-    window.dispatchEvent(new CustomEvent("mathclass:registered", {
-      detail: {
-        uid: credential.user.uid,
-        profile
-      }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("mathclass:registered", {
+        detail: {
+          uid: credential.user.uid,
+          profile
+        }
+      })
+    );
 
   } catch (error) {
     console.error("[Math Class] Registration failed:", error);
-    toast(readableError(error), "error");
+
+    showFormMessage(
+      "#registerFormMessage",
+      readableError(error)
+    );
   } finally {
     setFormBusy(form, false);
   }
@@ -574,17 +640,36 @@ async function handleLogin(event) {
   event.preventDefault();
 
   const form = event.currentTarget;
-  const email = getFormValue(form, ["email"]);
-  const password = getField(form, ["password"])?.value || "";
+
+  clearFormMessage("#loginFormMessage");
+
+  const email = fieldValue(form, [
+    '[name="email"]',
+    "#loginEmail"
+  ]).toLowerCase();
+
+  const password = fieldValue(form, [
+    '[name="password"]',
+    "#loginPassword"
+  ]);
 
   if (!email || !password) {
-    toast("Enter your email and password.", "warning");
+    showFormMessage(
+      "#loginFormMessage",
+      "Enter your email address and password."
+    );
     return;
   }
 
   setFormBusy(form, true);
 
   try {
+    const persistence = $("#rememberSession")?.checked
+      ? browserLocalPersistence
+      : browserSessionPersistence;
+
+    await withTimeout(setPersistence(auth, persistence));
+
     await withTimeout(
       signInWithEmailAndPassword(auth, email, password)
     );
@@ -593,7 +678,11 @@ async function handleLogin(event) {
 
   } catch (error) {
     console.error("[Math Class] Login failed:", error);
-    toast(readableError(error), "error");
+
+    showFormMessage(
+      "#loginFormMessage",
+      readableError(error)
+    );
   } finally {
     setFormBusy(form, false);
   }
@@ -606,28 +695,71 @@ async function handleLogin(event) {
 async function handlePasswordReset(event) {
   event.preventDefault();
 
-  const emailField = findElement(
-    "#resetEmail",
-    "#loginEmail",
-    'input[name="email"]',
-    'input[type="email"]'
-  );
+  const form = event.currentTarget;
 
-  const email = emailField?.value?.trim();
+  clearFormMessage("#forgotPasswordMessage");
+
+  const email = fieldValue(form, [
+    '[name="email"]',
+    "#resetEmail"
+  ]).toLowerCase();
 
   if (!email) {
-    toast("Enter your email address first.", "warning");
-    emailField?.focus();
+    showFormMessage(
+      "#forgotPasswordMessage",
+      "Enter your email address."
+    );
     return;
   }
 
+  setFormBusy(form, true);
+
   try {
     await withTimeout(sendPasswordResetEmail(auth, email));
-    toast("If an account exists for that email, a reset link has been sent.", "success");
+
+    showFormMessage(
+      "#forgotPasswordMessage",
+      "If an account exists for this address, a password reset email has been sent.",
+      "success"
+    );
+
   } catch (error) {
     console.error("[Math Class] Password reset failed:", error);
-    toast(readableError(error), "error");
+
+    showFormMessage(
+      "#forgotPasswordMessage",
+      readableError(error)
+    );
+  } finally {
+    setFormBusy(form, false);
   }
+}
+
+// ============================================================
+// PASSWORD VISIBILITY
+// ============================================================
+
+function bindPasswordToggle(buttonId, inputId) {
+  const button = $(`#${buttonId}`);
+  const input = $(`#${inputId}`);
+
+  if (!button || !input) return;
+
+  button.addEventListener("click", () => {
+    const show = input.type === "password";
+
+    input.type = show ? "text" : "password";
+    button.setAttribute("aria-pressed", String(show));
+
+    if (buttonId === "showLoginPassword") {
+      button.textContent = show ? "Hide" : "Show";
+    } else {
+      button.setAttribute(
+        "aria-label",
+        show ? "Hide password" : "Show password"
+      );
+    }
+  });
 }
 
 // ============================================================
@@ -635,152 +767,127 @@ async function handlePasswordReset(event) {
 // ============================================================
 
 function bindAuthenticationForms() {
-  const loginForms = $$(
-    "#loginForm, [data-auth-form='login'], form[data-form='login']"
+  $("#loginForm")?.addEventListener("submit", handleLogin);
+
+  $("#registerForm")?.addEventListener("submit", handleRegister);
+
+  $("#forgotPasswordForm")?.addEventListener(
+    "submit",
+    handlePasswordReset
   );
 
-  const registerForms = $$(
-    "#registerForm, [data-auth-form='register'], form[data-form='register']"
-  );
-
-  loginForms.forEach(form => {
-    form.addEventListener("submit", handleLogin);
+  $("#openRegisterButton")?.addEventListener("click", () => {
+    showAuthPanel("register");
   });
 
-  registerForms.forEach(form => {
-    form.addEventListener("submit", handleRegister);
+  $("#openLoginButton")?.addEventListener("click", () => {
+    showAuthPanel("login");
   });
 
-  $$(
-    "#forgotPasswordBtn, [data-action='forgot-password']"
-  ).forEach(button => {
-    button.addEventListener("click", handlePasswordReset);
+  $("#forgotPasswordButton")?.addEventListener("click", () => {
+    const loginEmail = $("#loginEmail");
+    const resetEmail = $("#resetEmail");
+
+    if (loginEmail && resetEmail && loginEmail.value.trim()) {
+      resetEmail.value = loginEmail.value.trim();
+    }
+
+    showAuthPanel("forgot");
   });
 
-  $$(
-    "#logoutBtn, #signOutBtn, [data-action='logout']"
-  ).forEach(button => {
-    button.addEventListener("click", async () => {
-      try {
-        await signOut(auth);
-        toast("You have been signed out.", "success");
-      } catch (error) {
-        toast(readableError(error), "error");
-      }
-    });
+  $("#backToLoginButton")?.addEventListener("click", () => {
+    showAuthPanel("login");
   });
+
+  $("#sidebarLogoutButton")?.addEventListener("click", handleLogout);
+
+  $("#showLoginPassword") &&
+    bindPasswordToggle("showLoginPassword", "loginPassword");
+
+  $("#showRegisterPassword") &&
+    bindPasswordToggle("showRegisterPassword", "registerPassword");
+}
+
+async function handleLogout() {
+  try {
+    await signOut(auth);
+    toast("You have been signed out.", "success");
+  } catch (error) {
+    console.error("[Math Class] Logout failed:", error);
+    toast(readableError(error), "error");
+  }
 }
 
 // ============================================================
-// VIEW MANAGEMENT
+// ROLE-BASED PAGE ROUTING
 // ============================================================
 
-function showAuthView() {
-  const authView = findElement(
-    "#authView",
-    "#authScreen",
-    "#authentication",
-    "[data-view='auth']"
-  );
+function normalizePage(page) {
+  const value = String(page || "dashboard")
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, "");
 
-  const appView = findElement(
-    "#appView",
-    "#dashboardView",
-    "#application",
-    "[data-view='app']"
-  );
+  const aliases = {
+    "study-tracker": "tracker",
+    "daily-practice": "tracker",
+    "study-history": "history",
+    "class-chat": "chat",
+    "doubt-inbox": "doubts",
+    "role-manager": "roles",
+    "system-overview": "dashboard",
+    "system-status": "system"
+  };
 
-  if (authView) {
-    authView.hidden = false;
-    authView.style.display = "";
-  }
-
-  if (appView) {
-    appView.hidden = true;
-    appView.style.display = "none";
-  }
-
-  document.body.classList.add("unauthenticated");
-  document.body.classList.remove("authenticated");
+  return aliases[value] || value || "dashboard";
 }
-
-function showApplicationView() {
-  const authView = findElement(
-    "#authView",
-    "#authScreen",
-    "#authentication",
-    "[data-view='auth']"
-  );
-
-  const appView = findElement(
-    "#appView",
-    "#dashboardView",
-    "#application",
-    "[data-view='app']"
-  );
-
-  if (authView) {
-    authView.hidden = true;
-    authView.style.display = "none";
-  }
-
-  if (appView) {
-    appView.hidden = false;
-    appView.style.display = "";
-  }
-
-  document.body.classList.remove("unauthenticated");
-  document.body.classList.add("authenticated");
-}
-
-// ============================================================
-// ROLE-BASED NAVIGATION
-// ============================================================
 
 function getAvailablePages(role) {
-  const common = [
-    "dashboard",
-    "announcements",
-    "profile"
-  ];
+  const common = ["dashboard", "announcements", "profile"];
 
-  const studentPages = [
+  if (role === "admin") {
+    return [
+      ...common,
+      "roles",
+      "moderation",
+      "audit",
+      "system"
+    ];
+  }
+
+  if (role === "teacher") {
+    return [
+      ...common,
+      "chat",
+      "verification",
+      "doubts",
+      "student-insights"
+    ];
+  }
+
+  return [
+    ...common,
     "tracker",
     "history",
     "chat",
     "doubts"
   ];
-
-  const teacherPages = [
-    "action-center",
-    "verification",
-    "doubts",
-    "student-insights"
-  ];
-
-  const adminPages = [
-    "system-overview",
-    "role-manager",
-    "moderation",
-    "system-status"
-  ];
-
-  if (role === "admin") {
-    return [...common, ...adminPages];
-  }
-
-  if (role === "teacher") {
-    return [...common, ...teacherPages];
-  }
-
-  return [...common, ...studentPages];
 }
 
 function canAccessPage(page, role) {
-  return getAvailablePages(role).includes(page);
+  return getAvailablePages(role).includes(normalizePage(page));
 }
 
 function updateRoleVisibility(role) {
+  // Existing navigation uses data-role="student|teacher|admin".
+  $$("[data-role]").forEach(element => {
+    const roles = element.dataset.role
+      .split(",")
+      .map(value => value.trim().toLowerCase());
+
+    element.hidden = !roles.includes(role);
+  });
+
   $$("[data-role-only]").forEach(element => {
     const roles = element.dataset.roleOnly
       .split(",")
@@ -797,15 +904,34 @@ function updateRoleVisibility(role) {
     element.hidden = roles.includes(role);
   });
 
-  $$("[data-role-label]").forEach(element => {
-    element.textContent =
-      role.charAt(0).toUpperCase() + role.slice(1);
-  });
+  const roleLabel = $("#sidebarRoleLabel");
+
+  if (roleLabel) {
+    roleLabel.textContent =
+      role.charAt(0).toUpperCase() +
+      role.slice(1) +
+      " workspace";
+  }
 }
 
-// ============================================================
-// PAGE ROUTING
-// ============================================================
+function ensureModuleContainer() {
+  const pageContent = $("#pageContent");
+
+  if (!pageContent) {
+    console.warn("[Math Class] #pageContent was not found.");
+    return;
+  }
+
+  // student.js uses #appView as its page container.
+  if (!$("#appView")) {
+    const appView = document.createElement("div");
+
+    appView.id = "appView";
+    appView.className = "role-module-view";
+
+    pageContent.appendChild(appView);
+  }
+}
 
 function showPage(page) {
   if (!state.user || !state.role) {
@@ -813,23 +939,30 @@ function showPage(page) {
     return;
   }
 
-  if (!canAccessPage(page, state.role)) {
+  const requestedPage = normalizePage(page);
+
+  if (!canAccessPage(requestedPage, state.role)) {
     toast("You do not have permission to open that page.", "error");
     page = "dashboard";
+  } else {
+    page = requestedPage;
   }
 
   state.currentPage = page;
 
+  // Show or hide pages generated by role modules.
   $$("[data-page]").forEach(section => {
-    const active = section.dataset.page === page;
+    const active = normalizePage(section.dataset.page) === page;
 
     section.hidden = !active;
     section.classList.toggle("active", active);
     section.setAttribute("aria-hidden", String(!active));
   });
 
+  // Match sidebar routes against normalized module page names.
   $$("[data-route]").forEach(link => {
-    const active = link.dataset.route === page;
+    const route = normalizePage(link.dataset.route);
+    const active = route === page;
 
     link.classList.toggle("active", active);
 
@@ -840,28 +973,30 @@ function showPage(page) {
     }
   });
 
-  const title = findElement(
-    "#pageTitle",
-    "[data-page-title]"
-  );
+  const title = findElement("#pageTitle", "[data-page-title]");
 
   if (title) {
-    const label = $$("[data-route]")
-      .find(link => link.dataset.route === page);
+    const activeLink = $$("[data-route]").find(
+      link => normalizePage(link.dataset.route) === page
+    );
 
-    title.textContent = label?.textContent?.trim() ||
-      page.replaceAll("-", " ").replace(/\b\w/g, char =>
-        char.toUpperCase()
+    title.textContent =
+      activeLink?.textContent?.trim() ||
+      page.replace(/-/g, " ").replace(/\b\w/g, letter =>
+        letter.toUpperCase()
       );
   }
 
-  window.dispatchEvent(new CustomEvent("mathclass:pagechange", {
-    detail: {
-      page,
-      role: state.role,
-      user: state.user
-    }
-  }));
+  window.dispatchEvent(
+    new CustomEvent("mathclass:pagechange", {
+      detail: {
+        page,
+        role: state.role,
+        user: state.user,
+        profile: state.profile
+      }
+    })
+  );
 
   closeNavigationDrawer();
 }
@@ -874,135 +1009,243 @@ function bindNavigation() {
 
     event.preventDefault();
 
-    const page = link.dataset.route;
-
-    if (page) showPage(page);
+    showPage(link.dataset.route);
   });
 
-  $$(
-    "#menuToggle, #sidebarToggle, [data-action='toggle-navigation']"
-  ).forEach(button => {
-    button.addEventListener("click", toggleNavigationDrawer);
+  $("#mobileMenuButton")?.addEventListener(
+    "click",
+    toggleNavigationDrawer
+  );
+
+  $("#sidebarScrim")?.addEventListener(
+    "click",
+    closeNavigationDrawer
+  );
+
+  $("#networkRetryButton")?.addEventListener("click", () => {
+    if (!navigator.onLine) {
+      toast("Your device is still offline.", "warning");
+      return;
+    }
+
+    window.location.reload();
   });
 
-  $$(
-    "#closeSidebar, [data-action='close-navigation']"
-  ).forEach(button => {
-    button.addEventListener("click", closeNavigationDrawer);
+  $("#pageRetryButton")?.addEventListener("click", () => {
+    showPage(state.currentPage);
   });
 }
 
 function toggleNavigationDrawer() {
-  document.body.classList.toggle("drawer-open");
+  const open = !document.body.classList.contains("drawer-open");
 
-  const drawer = findElement(
-    "#sidebar",
-    "#appSidebar",
-    "[data-navigation-drawer]"
-  );
+  document.body.classList.toggle("drawer-open", open);
 
-  const open = document.body.classList.contains("drawer-open");
+  const button = $("#mobileMenuButton");
+  const scrim = $("#sidebarScrim");
 
-  drawer?.setAttribute("aria-expanded", String(open));
+  button?.setAttribute("aria-expanded", String(open));
+
+  if (scrim) {
+    scrim.hidden = !open;
+  }
 }
 
 function closeNavigationDrawer() {
   document.body.classList.remove("drawer-open");
 
-  const drawer = findElement(
-    "#sidebar",
-    "#appSidebar",
-    "[data-navigation-drawer]"
-  );
+  $("#mobileMenuButton")?.setAttribute("aria-expanded", "false");
 
-  drawer?.setAttribute("aria-expanded", "false");
+  const scrim = $("#sidebarScrim");
+
+  if (scrim) {
+    scrim.hidden = true;
+  }
 }
 
 // ============================================================
-// USER PROFILE DISPLAY
+// USER INTERFACE
 // ============================================================
 
 function updateUserInterface(user, profile, role) {
-  const displayName =
+  const name =
     profile?.name ||
+    profile?.displayName ||
     user.displayName ||
     user.email?.split("@")[0] ||
     "Student";
 
   const email = profile?.email || user.email || "";
 
-  $$(
-    "#userName, #profileName, [data-user-name]"
-  ).forEach(element => {
-    element.textContent = displayName;
+  const avatar = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part.charAt(0))
+    .join("")
+    .toUpperCase();
+
+  [
+    "#userName",
+    "#profileName",
+    "#sidebarUserName",
+    "[data-user-name]"
+  ].forEach(selector => {
+    $$(selector).forEach(element => {
+      element.textContent = name;
+    });
   });
 
-  $$(
-    "#userEmail, #profileEmail, [data-user-email]"
-  ).forEach(element => {
-    element.textContent = email;
+  [
+    "#userEmail",
+    "#profileEmail",
+    "#sidebarUserEmail",
+    "[data-user-email]"
+  ].forEach(selector => {
+    $$(selector).forEach(element => {
+      element.textContent = email;
+    });
   });
 
-  $$(
-    "#userAvatar, #profileAvatar, [data-user-avatar]"
-  ).forEach(element => {
-    element.textContent = displayName
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map(part => part[0])
-      .join("")
-      .toUpperCase();
+  [
+    "#userAvatar",
+    "#profileAvatar",
+    "#sidebarAvatar",
+    "[data-user-avatar]"
+  ].forEach(selector => {
+    $$(selector).forEach(element => {
+      element.textContent = avatar || "M";
+    });
   });
 
   updateRoleVisibility(role);
 }
 
 // ============================================================
-// MODULE INITIALIZATION
+// ROLE MODULE INITIALIZATION
 // ============================================================
 
 async function initializeRoleModule(role) {
-  const modulePaths = {
+  const paths = {
     student: "./student.js",
     teacher: "./teacher.js",
     admin: "./admin.js"
   };
 
-  const path = modulePaths[role];
+  const path = paths[role];
 
-  if (!path) return;
+  if (!path) {
+    throw new Error("No application module exists for this role.");
+  }
 
-  try {
-    const module = await import(path);
+  ensureModuleContainer();
 
-    if (typeof module.init === "function") {
-      await module.init({
-        auth,
-        db,
-        user: state.user,
-        profile: state.profile,
-        role,
-        toast,
-        showPage,
-        getState: () => ({ ...state })
-      });
+  // Clean up the previously loaded module if supported.
+  if (
+    state.roleModule &&
+    typeof state.roleModule.cleanup === "function"
+  ) {
+    try {
+      state.roleModule.cleanup();
+    } catch (error) {
+      console.warn("[Math Class] Module cleanup warning:", error);
     }
+  }
 
-    window.dispatchEvent(new CustomEvent("mathclass:module-ready", {
+  const module = await import(path);
+
+  if (typeof module.init !== "function") {
+    throw new Error(`The ${role} module does not export init().`);
+  }
+
+  state.roleModule = module;
+  state.roleModuleName = role;
+
+  await withTimeout(
+    module.init({
+      auth,
+      db,
+      database: db,
+      user: state.user,
+      profile: state.profile,
+      userProfile: state.profile,
+      role,
+      toast,
+      showPage,
+      getState: () => ({ ...state })
+    }),
+    CONFIG.loadingTimeout
+  );
+
+  window.dispatchEvent(
+    new CustomEvent("mathclass:module-ready", {
       detail: { role }
-    }));
+    })
+  );
+}
 
-  } catch (error) {
-    // A role module may not exist until the next development phase.
-    console.warn(`[Math Class] ${role} module is not ready yet:`, error);
+// ============================================================
+// CONNECTION MONITOR
+// ============================================================
 
-    window.dispatchEvent(new CustomEvent("mathclass:module-error", {
-      detail: {
-        role,
-        message: error.message
+function updateConnectionStatus(online) {
+  state.online = online;
+
+  const banner = $("#networkBanner");
+  const message = $("#networkMessage");
+
+  if (banner) {
+    banner.hidden = online;
+  }
+
+  if (message) {
+    message.textContent = online
+      ? ""
+      : "Connection lost. Reconnecting to Firebase...";
+  }
+
+  document.body.classList.toggle("offline", !online);
+
+  window.dispatchEvent(
+    new CustomEvent("mathclass:connection", {
+      detail: { online }
+    })
+  );
+}
+
+function setupConnectionMonitor() {
+  window.addEventListener("online", () => {
+    updateConnectionStatus(true);
+    toast("Connection restored.", "success");
+  });
+
+  window.addEventListener("offline", () => {
+    updateConnectionStatus(false);
+    toast("You are offline. Changes may not be saved.", "warning");
+  });
+
+  updateConnectionStatus(navigator.onLine);
+
+  // Firebase's special connection-status path.
+  try {
+    state.connectionUnsubscribe = onValue(
+      ref(db, ".info/connected"),
+      snapshot => {
+        const connected = snapshot.val() === true;
+
+        if (connected) {
+          console.info("[Math Class] Connected to Realtime Database.");
+        }
+      },
+      error => {
+        console.warn(
+          "[Math Class] Connection monitor warning:",
+          error
+        );
       }
-    }));
+    );
+  } catch (error) {
+    console.warn("[Math Class] Connection monitor unavailable:", error);
   }
 }
 
@@ -1013,7 +1256,7 @@ async function initializeRoleModule(role) {
 async function handleAuthState(user) {
   const generation = ++state.authGeneration;
 
-  showLoading(user ? "Loading your classroom..." : "Preparing sign in...");
+  state.startupError = null;
 
   try {
     if (!user) {
@@ -1021,102 +1264,152 @@ async function handleAuthState(user) {
       state.profile = null;
       state.role = null;
 
+      // Remove role-specific listeners when signing out.
+      if (
+        state.roleModule &&
+        typeof state.roleModule.cleanup === "function"
+      ) {
+        try {
+          state.roleModule.cleanup();
+        } catch (error) {
+          console.warn("[Math Class] Module cleanup warning:", error);
+        }
+      }
+
+      state.roleModule = null;
+      state.roleModuleName = null;
+
       showAuthView();
+      markApplicationStarted();
 
-      state.initialized = true;
-      hideLoading();
-
-      window.dispatchEvent(new CustomEvent("mathclass:auth-ready", {
-        detail: { user: null, role: null }
-      }));
+      window.dispatchEvent(
+        new CustomEvent("mathclass:auth-ready", {
+          detail: { user: null, role: null }
+        })
+      );
 
       return;
     }
+
+    showLoading("Loading your classroom...");
 
     state.user = user;
 
     const profile = await getUserProfile(user);
 
-    // Ignore stale requests when the auth state changes mid-request.
     if (generation !== state.authGeneration) return;
 
     state.profile = profile;
-    state.role = normalizeRole(profile);
+    state.role = profile.role;
 
     showApplicationView();
 
     updateUserInterface(user, profile, state.role);
 
-    await initializeRoleModule(state.role);
+    // Initialize the correct role module.
+    try {
+      await initializeRoleModule(state.role);
+    } catch (moduleError) {
+      console.error(
+        `[Math Class] ${state.role} module failed:`,
+        moduleError
+      );
 
-    if (generation !== state.authGeneration) return;
+      const pageError = $("#pageErrorState");
+      const pageErrorMessage = $("#pageErrorMessage");
 
-    state.initialized = true;
-
-    showPage(
-      canAccessPage(state.currentPage, state.role)
-        ? state.currentPage
-        : "dashboard"
-    );
-
-    window.dispatchEvent(new CustomEvent("mathclass:auth-ready", {
-      detail: {
-        user,
-        profile: state.profile,
-        role: state.role
+      if (pageError && pageErrorMessage) {
+        pageError.hidden = false;
+        pageErrorMessage.textContent =
+          "Your account is signed in, but the dashboard could not load. " +
+          readableError(moduleError);
       }
-    }));
-
-  } catch (error) {
-    console.error("[Math Class] Application initialization failed:", error);
-
-    if (generation !== state.authGeneration) return;
-
-    state.initialized = true;
-
-    if (user) {
-      showApplicationView();
 
       toast(
-        "Your account is signed in, but your profile could not be loaded. Check Firebase permissions and try again.",
+        "Your account is signed in, but some dashboard features could not load.",
         "error",
         6000
       );
 
-      showFatalError(
-        "We couldn't load your account profile. Verify your Realtime Database rules and internet connection, then refresh."
+      window.dispatchEvent(
+        new CustomEvent("mathclass:module-error", {
+          detail: {
+            role: state.role,
+            message: moduleError.message
+          }
+        })
+      );
+    }
+
+    if (generation !== state.authGeneration) return;
+
+    const initialPage = canAccessPage(
+      state.currentPage,
+      state.role
+    )
+      ? state.currentPage
+      : "dashboard";
+
+    showPage(initialPage);
+
+    markApplicationStarted();
+
+    window.dispatchEvent(
+      new CustomEvent("mathclass:auth-ready", {
+        detail: {
+          user,
+          profile: state.profile,
+          role: state.role
+        }
+      })
+    );
+
+  } catch (error) {
+    console.error(
+      "[Math Class] Application initialization failed:",
+      error
+    );
+
+    if (generation !== state.authGeneration) return;
+
+    state.startupError = error;
+
+    if (user) {
+      showApplicationView();
+
+      const pageError = $("#pageErrorState");
+      const pageErrorMessage = $("#pageErrorMessage");
+
+      if (pageError && pageErrorMessage) {
+        pageError.hidden = false;
+        pageErrorMessage.textContent =
+          "Your account could not be loaded. " +
+          readableError(error);
+      }
+
+      showStartupError(
+        "We couldn't load your account profile. " +
+        readableError(error)
       );
     } else {
       showAuthView();
+      markApplicationStarted();
       toast(readableError(error), "error");
-    }
-
-  } finally {
-    if (generation === state.authGeneration) {
-      hideLoading();
     }
   }
 }
 
-// ============================================================
-// GLOBAL ERROR SAFETY
-// ============================================================
+function handleAuthError(error) {
+  console.error(
+    "[Math Class] Authentication listener failed:",
+    error
+  );
 
-window.addEventListener("unhandledrejection", event => {
-  console.error("[Math Class] Unhandled promise rejection:", event.reason);
-
-  // Prevent silent failures from becoming invisible to the user.
-  if (event.reason) {
-    toast(
-      "An operation failed. Please try again.",
-      "error"
-    );
-  }
-});
-
-window.addEventListener("error", event => {
-  console.error("[Math Class] JavaScript error:", event.error);
-});
+  showStartupError(
+    "Authentication could not start. " +
+    readableError(error)
+  );
+}
 
 // ============================================================
 // PUBLIC APPLICATION API
@@ -1140,7 +1433,7 @@ window.MathClass = {
     };
   },
 
-  refreshProfile: async () => {
+  async refreshProfile() {
     if (!auth.currentUser) {
       throw new Error("No user is signed in.");
     }
@@ -1148,7 +1441,7 @@ window.MathClass = {
     const profile = await getUserProfile(auth.currentUser);
 
     state.profile = profile;
-    state.role = normalizeRole(profile);
+    state.role = profile.role;
 
     updateUserInterface(auth.currentUser, profile, state.role);
 
@@ -1157,32 +1450,58 @@ window.MathClass = {
 };
 
 // ============================================================
+// GLOBAL ERROR HANDLING
+// ============================================================
+
+window.addEventListener("error", event => {
+  console.error(
+    "[Math Class] JavaScript error:",
+    event.error || event.message
+  );
+});
+
+window.addEventListener("unhandledrejection", event => {
+  console.error(
+    "[Math Class] Unhandled promise rejection:",
+    event.reason
+  );
+});
+
+// ============================================================
 // START APPLICATION
 // ============================================================
 
 function startApplication() {
+  if (authListenerStarted) return;
+
+  authListenerStarted = true;
+
   showLoading("Preparing your classroom...");
 
-  setupConnectionMonitor();
+  // Bind events before checking authentication.
   bindAuthenticationForms();
   bindNavigation();
+  setupConnectionMonitor();
 
-  onAuthStateChanged(auth, handleAuthState, error => {
-    console.error("[Math Class] Authentication listener failed:", error);
+  const currentYear = $("#currentYear");
 
-    state.initialized = true;
-    hideLoading();
+  if (currentYear) {
+    currentYear.textContent = String(new Date().getFullYear());
+  }
 
-    showFatalError(
-      "Authentication could not be initialized. Check your Firebase configuration and enabled sign-in methods."
-    );
-  });
+  onAuthStateChanged(
+    auth,
+    handleAuthState,
+    handleAuthError
+  );
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", startApplication, {
-    once: true
-  });
+  document.addEventListener(
+    "DOMContentLoaded",
+    startApplication,
+    { once: true }
+  );
 } else {
   startApplication();
 }
