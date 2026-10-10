@@ -1,882 +1,1188 @@
-import { auth, db } from './firebase-config.js';
+// ============================================================
+// MATH CLASS — VIRTUAL LEARNING PORTAL
+// File: app.js
+// Firebase SDK: 10.5.0 Modular
+// ============================================================
+
+import { auth, db } from "./firebase-config.js";
 
 import {
-  onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut
-} from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+  onAuthStateChanged,
+  signOut,
+  updateProfile,
+  sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
 import {
   ref,
   get,
   set,
-  update
-} from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js';
+  update,
+  onValue
+} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
 
-import { initAdmin } from './admin.js';
-import { initTeacher } from './teacher.js';
-import { initStudent } from './student.js';
+// ============================================================
+// CONFIGURATION
+// ============================================================
 
-const ADMIN_UID = 'YNdqDJRyZ1hFAtqrJeZJYScldfc2';
+const CONFIG = {
+  profilePath: "users",
+  loadingTimeout: 12000,
+  allowedRoles: ["student", "teacher", "admin"],
+  defaultRole: "student"
+};
 
-const $ = id => document.getElementById(id);
+// ============================================================
+// APPLICATION STATE
+// ============================================================
 
 const state = {
   user: null,
   profile: null,
   role: null,
-  authMode: 'login',
-  activePage: null,
-  initialized: {
-    admin: false,
-    teacher: false,
-    student: false
-  }
+  initialized: false,
+  loading: false,
+  online: navigator.onLine,
+  currentPage: "dashboard",
+  unsubscribeConnection: null,
+  authGeneration: 0
 };
 
-let toastTimer = null;
-let authListenerStarted = false;
-let authSubmissionInProgress = false;
+// ============================================================
+// DOM HELPERS
+// ============================================================
 
-/* -------------------------------------------------------
-   PRELOADER
-------------------------------------------------------- */
+const $ = (selector, root = document) =>
+  root.querySelector(selector);
 
-function hidePreloader() {
-  const loader = $('loadingScreen');
+const $$ = (selector, root = document) =>
+  [...root.querySelectorAll(selector)];
+
+function findElement(...selectors) {
+  for (const selector of selectors) {
+    const element = $(selector);
+    if (element) return element;
+  }
+
+  return null;
+}
+
+// ============================================================
+// SAFE ASYNC OPERATIONS
+// ============================================================
+
+function withTimeout(promise, timeout = CONFIG.loadingTimeout) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("The request took too long. Please try again."));
+      }, timeout);
+    })
+  ]);
+}
+
+function escapeHTML(value = "") {
+  return String(value).replace(/[&<>"']/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[character]);
+}
+
+// ============================================================
+// LOADING SCREEN
+// ============================================================
+
+function showLoading(message = "Loading your classroom...") {
+  state.loading = true;
+
+  const loader = findElement(
+    "#loadingScreen",
+    "#globalLoader",
+    "#appLoader",
+    "[data-loading-screen]"
+  );
 
   if (loader) {
-    loader.classList.add('loader-done');
-    loader.setAttribute('aria-hidden', 'true');
+    loader.hidden = false;
+    loader.style.display = "flex";
+    loader.setAttribute("aria-live", "polite");
+
+    const text = findElement(
+      "#loadingText",
+      "#loaderText",
+      "[data-loading-text]"
+    );
+
+    if (text) text.textContent = message;
   }
 
-  if (typeof window.__hideClassroomLoader === 'function') {
-    window.__hideClassroomLoader();
+  document.body.classList.add("app-loading");
+}
+
+function hideLoading() {
+  state.loading = false;
+
+  const loader = findElement(
+    "#loadingScreen",
+    "#globalLoader",
+    "#appLoader",
+    "[data-loading-screen]"
+  );
+
+  if (loader) {
+    loader.hidden = true;
+    loader.style.display = "none";
   }
+
+  document.body.classList.remove("app-loading");
 }
 
-function updateLoadingText(message) {
-  const element = $('loadingText');
-  if (element) element.textContent = message;
-}
+// Always release the loader if initialization fails.
+window.setTimeout(() => {
+  if (state.loading) {
+    hideLoading();
 
-// Never allow an initialization failure to cover the screen indefinitely.
-const emergencyLoaderTimer = window.setTimeout(hidePreloader, 10000);
-
-window.addEventListener('error', event => {
-  console.error('Classroom JavaScript error:', event.error || event.message);
-  hidePreloader();
-});
-
-window.addEventListener('unhandledrejection', event => {
-  console.error('Unhandled classroom promise rejection:', event.reason);
-  hidePreloader();
-});
-
-/* -------------------------------------------------------
-   HELPERS
-------------------------------------------------------- */
-
-function escapeHTML(value) {
-  return String(value ?? '').replace(/[&<>"']/g, char => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  })[char]);
-}
-
-function showToast(message, type = 'info') {
-  const toast = $('toast');
-  if (!toast) return;
-
-  const icons = {
-    success: 'fa-circle-check',
-    error: 'fa-circle-exclamation',
-    info: 'fa-circle-info'
-  };
-
-  const colors = {
-    success: 'text-emerald-300',
-    error: 'text-rose-300',
-    info: 'text-indigo-300'
-  };
-
-  toast.innerHTML = `
-    <div class="flex items-start gap-3">
-      <i class="fa-solid ${icons[type] || icons.info} ${colors[type] || colors.info} mt-1"></i>
-      <span>${escapeHTML(message)}</span>
-    </div>
-  `;
-
-  toast.classList.remove('hidden');
-
-  clearTimeout(toastTimer);
-
-  toastTimer = setTimeout(() => {
-    toast.classList.add('hidden');
-  }, 3500);
-}
-
-function setAuthMessage(message, isError = false) {
-  const element = $('authMessage');
-  if (!element) return;
-
-  element.textContent = message;
-  element.className = isError
-    ? 'text-sm text-center text-rose-300'
-    : 'text-sm text-center muted';
-}
-
-function setDashboardMessage(message) {
-  const element = $('dashboardMessage');
-  if (element) element.textContent = message || '';
-}
-
-function setButtonBusy(button, busy, busyText = 'Please wait...') {
-  if (!button) return;
-
-  if (busy) {
-    if (!button.dataset.originalHtml) {
-      button.dataset.originalHtml = button.innerHTML;
-    }
-
-    button.disabled = true;
-    button.innerHTML = `
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>
-      ${escapeHTML(busyText)}
-    `;
-  } else {
-    button.disabled = false;
-
-    if (button.dataset.originalHtml) {
-      button.innerHTML = button.dataset.originalHtml;
-      delete button.dataset.originalHtml;
+    if (!state.initialized) {
+      showFatalError(
+        "The classroom could not finish loading. Check your connection and refresh the page."
+      );
     }
   }
+}, CONFIG.loadingTimeout + 3000);
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+function ensureToastContainer() {
+  let container = findElement(
+    "#toastContainer",
+    "#toast-container",
+    "[data-toast-container]"
+  );
+
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    container.setAttribute("aria-live", "polite");
+    container.setAttribute("aria-atomic", "false");
+
+    Object.assign(container.style, {
+      position: "fixed",
+      right: "20px",
+      bottom: "20px",
+      zIndex: "10000",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+      maxWidth: "min(380px, calc(100vw - 32px))"
+    });
+
+    document.body.appendChild(container);
+  }
+
+  return container;
 }
 
-function localDateString(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+function toast(message, type = "info", duration = 3500) {
+  const container = ensureToastContainer();
+  const item = document.createElement("div");
 
-  return `${year}-${month}-${day}`;
+  const styles = {
+    success: {
+      background: "#F0FDF4",
+      color: "#166534",
+      border: "#BBF7D0"
+    },
+    error: {
+      background: "#FEF2F2",
+      color: "#991B1B",
+      border: "#FECACA"
+    },
+    warning: {
+      background: "#FFFBEB",
+      color: "#92400E",
+      border: "#FDE68A"
+    },
+    info: {
+      background: "#EFF6FF",
+      color: "#1E40AF",
+      border: "#BFDBFE"
+    }
+  };
+
+  const palette = styles[type] || styles.info;
+
+  Object.assign(item.style, {
+    padding: "13px 16px",
+    borderRadius: "10px",
+    border: `1px solid ${palette.border}`,
+    background: palette.background,
+    color: palette.color,
+    boxShadow: "0 8px 24px rgba(15,23,42,.08)",
+    fontSize: "14px",
+    lineHeight: "1.5",
+    fontWeight: "500",
+    overflowWrap: "anywhere",
+    opacity: "0",
+    transform: "translateY(8px)",
+    transition: "opacity 200ms ease, transform 200ms ease"
+  });
+
+  item.textContent = message;
+  container.appendChild(item);
+
+  requestAnimationFrame(() => {
+    item.style.opacity = "1";
+    item.style.transform = "translateY(0)";
+  });
+
+  window.setTimeout(() => {
+    item.style.opacity = "0";
+    item.style.transform = "translateY(8px)";
+
+    window.setTimeout(() => item.remove(), 250);
+  }, duration);
 }
 
-function formatTime(timestamp) {
-  if (!timestamp) return '';
+// ============================================================
+// ERROR HANDLING
+// ============================================================
 
-  const date = new Date(timestamp);
+function readableError(error) {
+  const code = error?.code || "";
 
-  if (Number.isNaN(date.getTime())) return '';
+  const messages = {
+    "auth/invalid-email": "Please enter a valid email address.",
+    "auth/user-not-found": "No account was found with this email.",
+    "auth/wrong-password": "Incorrect email or password.",
+    "auth/invalid-credential": "Incorrect email or password.",
+    "auth/email-already-in-use": "An account with this email already exists.",
+    "auth/weak-password": "Your password must be at least 6 characters.",
+    "auth/too-many-requests": "Too many attempts. Please try again later.",
+    "auth/network-request-failed": "Network error. Check your internet connection.",
+    "auth/operation-not-allowed": "This sign-in method is not enabled in Firebase.",
+    "auth/invalid-api-key": "Firebase configuration is invalid.",
+    "PERMISSION_DENIED": "Access denied by Firebase security rules."
+  };
 
-  return date.toLocaleString([], {
-    dateStyle: 'medium',
-    timeStyle: 'short'
+  return messages[code] ||
+    error?.message ||
+    "Something went wrong. Please try again.";
+}
+
+function showFatalError(message) {
+  let panel = findElement("#fatalError", "[data-fatal-error]");
+
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.id = "fatalError";
+
+    Object.assign(panel.style, {
+      maxWidth: "520px",
+      margin: "40px auto",
+      padding: "24px",
+      borderRadius: "12px",
+      border: "1px solid #FECACA",
+      background: "#FFFFFF",
+      color: "#111827",
+      textAlign: "center"
+    });
+
+    document.body.appendChild(panel);
+  }
+
+  panel.replaceChildren();
+
+  const heading = document.createElement("h2");
+  heading.textContent = "Unable to load classroom";
+
+  const description = document.createElement("p");
+  description.textContent = message;
+
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.textContent = "Try again";
+
+  Object.assign(retry.style, {
+    border: "0",
+    borderRadius: "8px",
+    padding: "12px 18px",
+    background: "#4F46E5",
+    color: "#FFFFFF",
+    cursor: "pointer"
+  });
+
+  retry.addEventListener("click", () => location.reload());
+
+  panel.append(heading, description, retry);
+  panel.hidden = false;
+}
+
+// ============================================================
+// CONNECTION STATUS
+// ============================================================
+
+function setupConnectionMonitor() {
+  const banner = ensureConnectionBanner();
+
+  function updateConnectionStatus(online) {
+    state.online = online;
+
+    banner.hidden = online;
+    banner.textContent = online
+      ? ""
+      : "Connection lost. Reconnecting to Firebase...";
+
+    document.body.classList.toggle("offline", !online);
+
+    window.dispatchEvent(new CustomEvent("mathclass:connection", {
+      detail: { online }
+    }));
+  }
+
+  window.addEventListener("online", () => {
+    updateConnectionStatus(true);
+    toast("Connection restored.", "success");
+  });
+
+  window.addEventListener("offline", () => {
+    updateConnectionStatus(false);
+    toast("You are offline. Changes may not be saved.", "warning");
+  });
+
+  updateConnectionStatus(navigator.onLine);
+}
+
+function ensureConnectionBanner() {
+  let banner = findElement(
+    "#connectionBanner",
+    "[data-connection-banner]"
+  );
+
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "connectionBanner";
+
+    Object.assign(banner.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      right: "0",
+      zIndex: "9999",
+      padding: "10px 16px",
+      textAlign: "center",
+      fontSize: "13px",
+      background: "#FEF3C7",
+      color: "#92400E"
+    });
+
+    document.body.prepend(banner);
+  }
+
+  banner.hidden = true;
+  return banner;
+}
+
+// ============================================================
+// USER PROFILE
+// ============================================================
+
+async function getUserProfile(user) {
+  const snapshot = await withTimeout(
+    get(ref(db, `${CONFIG.profilePath}/${user.uid}`))
+  );
+
+  if (snapshot.exists()) {
+    return snapshot.val();
+  }
+
+  // Existing account without a profile:
+  // create a basic student profile.
+  const profile = {
+    uid: user.uid,
+    name: user.displayName || "Student",
+    email: user.email || "",
+    role: CONFIG.defaultRole,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await withTimeout(
+    set(ref(db, `${CONFIG.profilePath}/${user.uid}`), profile)
+  );
+
+  return profile;
+}
+
+function normalizeRole(profile) {
+  const role = String(profile?.role || CONFIG.defaultRole)
+    .trim()
+    .toLowerCase();
+
+  return CONFIG.allowedRoles.includes(role)
+    ? role
+    : CONFIG.defaultRole;
+}
+
+// ============================================================
+// AUTHENTICATION FORM HELPERS
+// ============================================================
+
+function setFormBusy(form, busy) {
+  if (!form) return;
+
+  form.setAttribute("aria-busy", String(busy));
+
+  $$('button[type="submit"], input[type="submit"]', form)
+    .forEach(button => {
+      if (busy) {
+        if (!button.dataset.originalText) {
+          button.dataset.originalText =
+            button.textContent || button.value || "Submit";
+        }
+
+        button.disabled = true;
+
+        if (button.tagName === "INPUT") {
+          button.value = "Please wait...";
+        } else {
+          button.textContent = "Please wait...";
+        }
+      } else {
+        button.disabled = false;
+
+        const original = button.dataset.originalText;
+
+        if (original) {
+          if (button.tagName === "INPUT") {
+            button.value = original;
+          } else {
+            button.textContent = original;
+          }
+        }
+      }
+    });
+}
+
+function getField(form, names) {
+  for (const name of names) {
+    const field =
+      form.querySelector(`[name="${name}"]`) ||
+      form.querySelector(`#${name}`);
+
+    if (field) return field;
+  }
+
+  return null;
+}
+
+function getFormValue(form, names) {
+  return String(getField(form, names)?.value || "").trim();
+}
+
+// ============================================================
+// REGISTER
+// ============================================================
+
+async function handleRegister(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+
+  const name = getFormValue(form, [
+    "name",
+    "fullName",
+    "displayName",
+    "studentName"
+  ]);
+
+  const email = getFormValue(form, ["email"]);
+  const password = getField(form, ["password"])?.value || "";
+  const confirmPassword =
+    getField(form, ["confirmPassword", "passwordConfirm"])?.value;
+
+  if (!email || !password) {
+    toast("Please enter your email and password.", "warning");
+    return;
+  }
+
+  if (password.length < 6) {
+    toast("Password must contain at least 6 characters.", "warning");
+    return;
+  }
+
+  if (confirmPassword !== undefined && password !== confirmPassword) {
+    toast("Your passwords do not match.", "warning");
+    return;
+  }
+
+  setFormBusy(form, true);
+
+  try {
+    const credential = await withTimeout(
+      createUserWithEmailAndPassword(auth, email, password)
+    );
+
+    if (name) {
+      await updateProfile(credential.user, {
+        displayName: name
+      });
+    }
+
+    const profile = {
+      uid: credential.user.uid,
+      name: name || "Student",
+      email: credential.user.email || email,
+      role: CONFIG.defaultRole,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    await withTimeout(
+      set(ref(db, `${CONFIG.profilePath}/${credential.user.uid}`), profile)
+    );
+
+    toast("Your account has been created successfully.", "success");
+
+    window.dispatchEvent(new CustomEvent("mathclass:registered", {
+      detail: {
+        uid: credential.user.uid,
+        profile
+      }
+    }));
+
+  } catch (error) {
+    console.error("[Math Class] Registration failed:", error);
+    toast(readableError(error), "error");
+  } finally {
+    setFormBusy(form, false);
+  }
+}
+
+// ============================================================
+// LOGIN
+// ============================================================
+
+async function handleLogin(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const email = getFormValue(form, ["email"]);
+  const password = getField(form, ["password"])?.value || "";
+
+  if (!email || !password) {
+    toast("Enter your email and password.", "warning");
+    return;
+  }
+
+  setFormBusy(form, true);
+
+  try {
+    await withTimeout(
+      signInWithEmailAndPassword(auth, email, password)
+    );
+
+    toast("Welcome back!", "success");
+
+  } catch (error) {
+    console.error("[Math Class] Login failed:", error);
+    toast(readableError(error), "error");
+  } finally {
+    setFormBusy(form, false);
+  }
+}
+
+// ============================================================
+// PASSWORD RESET
+// ============================================================
+
+async function handlePasswordReset(event) {
+  event.preventDefault();
+
+  const emailField = findElement(
+    "#resetEmail",
+    "#loginEmail",
+    'input[name="email"]',
+    'input[type="email"]'
+  );
+
+  const email = emailField?.value?.trim();
+
+  if (!email) {
+    toast("Enter your email address first.", "warning");
+    emailField?.focus();
+    return;
+  }
+
+  try {
+    await withTimeout(sendPasswordResetEmail(auth, email));
+    toast("If an account exists for that email, a reset link has been sent.", "success");
+  } catch (error) {
+    console.error("[Math Class] Password reset failed:", error);
+    toast(readableError(error), "error");
+  }
+}
+
+// ============================================================
+// AUTHENTICATION EVENT BINDINGS
+// ============================================================
+
+function bindAuthenticationForms() {
+  const loginForms = $$(
+    "#loginForm, [data-auth-form='login'], form[data-form='login']"
+  );
+
+  const registerForms = $$(
+    "#registerForm, [data-auth-form='register'], form[data-form='register']"
+  );
+
+  loginForms.forEach(form => {
+    form.addEventListener("submit", handleLogin);
+  });
+
+  registerForms.forEach(form => {
+    form.addEventListener("submit", handleRegister);
+  });
+
+  $$(
+    "#forgotPasswordBtn, [data-action='forgot-password']"
+  ).forEach(button => {
+    button.addEventListener("click", handlePasswordReset);
+  });
+
+  $$(
+    "#logoutBtn, #signOutBtn, [data-action='logout']"
+  ).forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        await signOut(auth);
+        toast("You have been signed out.", "success");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    });
   });
 }
 
-function getFriendlyError(error) {
-  const code = error?.code || '';
+// ============================================================
+// VIEW MANAGEMENT
+// ============================================================
 
-  const messages = {
-    'auth/email-already-in-use': 'An account with this email already exists.',
-    'auth/invalid-email': 'Please enter a valid email address.',
-    'auth/invalid-credential': 'Incorrect email or password.',
-    'auth/user-not-found': 'No account was found with this email.',
-    'auth/wrong-password': 'Incorrect email or password.',
-    'auth/weak-password': 'Please use a stronger password.',
-    'auth/too-many-requests': 'Too many attempts. Please try again later.',
-    'auth/network-request-failed': 'Network error. Check your internet connection.',
-    'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase.',
-    'auth/unauthorized-domain': 'This website domain is not authorised in Firebase Authentication.',
-    'PERMISSION_DENIED': 'Firebase denied access. Please check your database rules.'
-  };
+function showAuthView() {
+  const authView = findElement(
+    "#authView",
+    "#authScreen",
+    "#authentication",
+    "[data-view='auth']"
+  );
 
-  return messages[code] || error?.message || 'Something went wrong. Please try again.';
+  const appView = findElement(
+    "#appView",
+    "#dashboardView",
+    "#application",
+    "[data-view='app']"
+  );
+
+  if (authView) {
+    authView.hidden = false;
+    authView.style.display = "";
+  }
+
+  if (appView) {
+    appView.hidden = true;
+    appView.style.display = "none";
+  }
+
+  document.body.classList.add("unauthenticated");
+  document.body.classList.remove("authenticated");
 }
 
-/* -------------------------------------------------------
-   GLOBAL API FOR THE OTHER MODULES
-------------------------------------------------------- */
+function showApplicationView() {
+  const authView = findElement(
+    "#authView",
+    "#authScreen",
+    "#authentication",
+    "[data-view='auth']"
+  );
 
-window.classroom = {
-  get user() {
-    return state.user;
-  },
+  const appView = findElement(
+    "#appView",
+    "#dashboardView",
+    "#application",
+    "[data-view='app']"
+  );
 
-  get profile() {
-    return state.profile;
-  },
-
-  get role() {
-    return state.role;
-  },
-
-  escapeHTML,
-  showToast,
-  formatTime,
-  localDateString,
-  setDashboardMessage,
-
-  async refreshProfile() {
-    if (!state.user) return null;
-
-    const snapshot = await get(ref(db, `users/${state.user.uid}`));
-
-    state.profile = snapshot.exists() ? snapshot.val() : null;
-
-    return state.profile;
+  if (authView) {
+    authView.hidden = true;
+    authView.style.display = "none";
   }
-};
 
-/* -------------------------------------------------------
-   AUTH SCREEN
-------------------------------------------------------- */
+  if (appView) {
+    appView.hidden = false;
+    appView.style.display = "";
+  }
 
-function showLoginScreen() {
-  $('authScreen')?.classList.remove('hidden');
-  $('authScreen')?.classList.add('flex');
-  $('appShell')?.classList.add('hidden');
+  document.body.classList.remove("unauthenticated");
+  document.body.classList.add("authenticated");
 }
 
-function showAppScreen() {
-  $('authScreen')?.classList.add('hidden');
-  $('authScreen')?.classList.remove('flex');
-  $('appShell')?.classList.remove('hidden');
-}
+// ============================================================
+// ROLE-BASED NAVIGATION
+// ============================================================
 
-function setAuthMode(mode) {
-  state.authMode = mode === 'register' ? 'register' : 'login';
-
-  const isRegister = state.authMode === 'register';
-
-  $('nameGroup')?.classList.toggle('hidden', !isRegister);
-
-  if ($('displayName')) {
-    $('displayName').required = isRegister;
-  }
-
-  if ($('password')) {
-    $('password').autocomplete = isRegister
-      ? 'new-password'
-      : 'current-password';
-  }
-
-  const loginTab = $('loginTab');
-  const registerTab = $('registerTab');
-
-  if (loginTab) {
-    loginTab.className = isRegister
-      ? 'secondary-btn'
-      : 'primary-btn';
-  }
-
-  if (registerTab) {
-    registerTab.className = isRegister
-      ? 'primary-btn'
-      : 'secondary-btn';
-  }
-
-  if ($('submitText')) {
-    $('submitText').textContent = isRegister
-      ? 'Create account'
-      : 'Sign in';
-  }
-
-  setAuthMessage('');
-}
-
-async function handleAuthSubmit(event) {
-  event.preventDefault();
-
-  if (authSubmissionInProgress) return;
-
-  const email = $('email')?.value.trim();
-  const password = $('password')?.value;
-  const displayName = $('displayName')?.value.trim();
-
-  if (!email || !password) {
-    setAuthMessage('Enter your email address and password.', true);
-    return;
-  }
-
-  if (state.authMode === 'register' && !displayName) {
-    setAuthMessage('Enter your full name.', true);
-    return;
-  }
-
-  const button = $('submitButton');
-
-  authSubmissionInProgress = true;
-  setButtonBusy(button, true, 'Connecting...');
-  setAuthMessage('');
-
-  try {
-    if (state.authMode === 'register') {
-      const credential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      const uid = credential.user.uid;
-
-      const initialProfile = {
-        displayName,
-        email,
-        role: uid === ADMIN_UID ? 'admin' : 'student',
-        rollNumber: 0,
-        createdAt: Date.now()
-      };
-
-      try {
-        await set(ref(db, `users/${uid}`), initialProfile);
-      } catch (databaseError) {
-        // Auth creation has already succeeded. Sign out rather than
-        // leave the user in a half-configured session.
-        console.error('Could not create the user profile:', databaseError);
-
-        await signOut(auth);
-
-        throw new Error(
-          'Your account was created, but your profile could not be saved. Check your Firebase Database rules and try signing in again.'
-        );
-      }
-
-      showToast('Your account has been created.', 'success');
-    } else {
-      await signInWithEmailAndPassword(auth, email, password);
-      showToast('Welcome back!', 'success');
-    }
-
-  } catch (error) {
-    console.error('Authentication failed:', error);
-    setAuthMessage(getFriendlyError(error), true);
-
-  } finally {
-    authSubmissionInProgress = false;
-    setButtonBusy(button, false);
-  }
-}
-
-async function handlePasswordReset() {
-  const email = $('email')?.value.trim();
-
-  if (!email) {
-    setAuthMessage('Enter your email address first.', true);
-    $('email')?.focus();
-    return;
-  }
-
-  const button = $('forgotPassword');
-
-  if (button) button.disabled = true;
-
-  try {
-    await sendPasswordResetEmail(auth, email);
-    setAuthMessage('If an account exists for this address, a reset email will be sent.');
-  } catch (error) {
-    console.error('Password reset failed:', error);
-    setAuthMessage(getFriendlyError(error), true);
-  } finally {
-    if (button) button.disabled = false;
-  }
-}
-
-/* -------------------------------------------------------
-   PROFILE AND ROLE INITIALISATION
-------------------------------------------------------- */
-
-async function hydrateUser(user) {
-  updateLoadingText('Loading your classroom...');
-
-  let profile = null;
-
-  try {
-    const snapshot = await get(ref(db, `users/${user.uid}`));
-
-    if (snapshot.exists()) {
-      profile = snapshot.val();
-    } else {
-      // Support an authenticated account without a database profile.
-      // The server-side rules must still enforce who can write this path.
-      profile = {
-        displayName: user.displayName || user.email?.split('@')[0] || 'Student',
-        email: user.email || '',
-        role: user.uid === ADMIN_UID ? 'admin' : 'student',
-        rollNumber: 0,
-        createdAt: Date.now()
-      };
-
-      await set(ref(db, `users/${user.uid}`), profile);
-    }
-
-    // This specific UID is recognised as the administrator in the UI.
-    // Database rules must independently protect administrator privileges.
-    if (user.uid === ADMIN_UID) {
-      profile.role = 'admin';
-
-      if (snapshot.exists() && snapshot.val().role !== 'admin') {
-        await update(ref(db, `users/${user.uid}`), {
-          role: 'admin'
-        });
-      }
-    }
-
-  } catch (error) {
-    console.error('Profile loading failed:', error);
-
-    // Do not trap the user behind the preloader if the database is
-    // unavailable. Show a limited session and explain the problem.
-    profile = {
-      displayName: user.displayName || user.email?.split('@')[0] || 'User',
-      email: user.email || '',
-      role: user.uid === ADMIN_UID ? 'admin' : 'student',
-      rollNumber: 0
-    };
-
-    showToast(
-      'Your account is signed in, but your profile could not be loaded. Some features may be unavailable.',
-      'error'
-    );
-  }
-
-  state.user = user;
-  state.profile = profile;
-  state.role = user.uid === ADMIN_UID
-    ? 'admin'
-    : (profile.role || 'student');
-
-  window.classroom.user = user;
-
-  updateUserInterface();
-
-  showAppScreen();
-
-  // Ensure the loader disappears before optional dashboard modules run.
-  hidePreloader();
-
-  clearTimeout(emergencyLoaderTimer);
-
-  initialiseRoleModules();
-
-  const preferredPage = state.role === 'admin'
-    ? 'admin-panel'
-    : state.role === 'teacher'
-      ? 'teacher-dashboard'
-      : 'profile';
-
-  setPage(preferredPage);
-}
-
-function updateUserInterface() {
-  const profile = state.profile || {};
-  const displayName =
-    profile.displayName ||
-    state.user?.displayName ||
-    state.user?.email?.split('@')[0] ||
-    'User';
-
-  if ($('userName')) {
-    $('userName').textContent = displayName;
-  }
-
-  if ($('userRole')) {
-    $('userRole').textContent = state.role || 'student';
-  }
-
-  if ($('userAvatar')) {
-    $('userAvatar').textContent =
-      displayName.trim().charAt(0).toUpperCase() || 'U';
-  }
-
-  if ($('profileName')) {
-    $('profileName').value = profile.displayName || displayName;
-  }
-
-  if ($('profileRoll')) {
-    $('profileRoll').value = profile.rollNumber ?? 0;
-  }
-
-  if ($('profileEmail')) {
-    $('profileEmail').value = state.user?.email || '';
-  }
-
-  const teacherPages = [
-    'teacher-dashboard',
-    'doubt-inbox'
+function getAvailablePages(role) {
+  const common = [
+    "dashboard",
+    "announcements",
+    "profile"
   ];
 
   const studentPages = [
-    'profile',
-    'notices',
-    'tracker',
-    'class-chat',
-    'ask-doubt'
+    "tracker",
+    "history",
+    "chat",
+    "doubts"
   ];
 
-  document.querySelectorAll('[data-page]').forEach(button => {
-    const page = button.dataset.page;
+  const teacherPages = [
+    "action-center",
+    "verification",
+    "doubts",
+    "student-insights"
+  ];
 
-    let visible = studentPages.includes(page);
+  const adminPages = [
+    "system-overview",
+    "role-manager",
+    "moderation",
+    "system-status"
+  ];
 
-    if (state.role === 'teacher') {
-      visible = visible || teacherPages.includes(page);
-    }
+  if (role === "admin") {
+    return [...common, ...adminPages];
+  }
 
-    if (state.role === 'admin') {
-      visible = page === 'admin-panel';
-    }
+  if (role === "teacher") {
+    return [...common, ...teacherPages];
+  }
 
-    button.classList.toggle('hidden', !visible);
+  return [...common, ...studentPages];
+}
+
+function canAccessPage(page, role) {
+  return getAvailablePages(role).includes(page);
+}
+
+function updateRoleVisibility(role) {
+  $$("[data-role-only]").forEach(element => {
+    const roles = element.dataset.roleOnly
+      .split(",")
+      .map(value => value.trim().toLowerCase());
+
+    element.hidden = !roles.includes(role);
+  });
+
+  $$("[data-role-hide]").forEach(element => {
+    const roles = element.dataset.roleHide
+      .split(",")
+      .map(value => value.trim().toLowerCase());
+
+    element.hidden = roles.includes(role);
+  });
+
+  $$("[data-role-label]").forEach(element => {
+    element.textContent =
+      role.charAt(0).toUpperCase() + role.slice(1);
   });
 }
 
-/* -------------------------------------------------------
-   ROLE MODULES
-------------------------------------------------------- */
+// ============================================================
+// PAGE ROUTING
+// ============================================================
 
-function safeInitialise(label, callback) {
+function showPage(page) {
+  if (!state.user || !state.role) {
+    showAuthView();
+    return;
+  }
+
+  if (!canAccessPage(page, state.role)) {
+    toast("You do not have permission to open that page.", "error");
+    page = "dashboard";
+  }
+
+  state.currentPage = page;
+
+  $$("[data-page]").forEach(section => {
+    const active = section.dataset.page === page;
+
+    section.hidden = !active;
+    section.classList.toggle("active", active);
+    section.setAttribute("aria-hidden", String(!active));
+  });
+
+  $$("[data-route]").forEach(link => {
+    const active = link.dataset.route === page;
+
+    link.classList.toggle("active", active);
+
+    if (active) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+
+  const title = findElement(
+    "#pageTitle",
+    "[data-page-title]"
+  );
+
+  if (title) {
+    const label = $$("[data-route]")
+      .find(link => link.dataset.route === page);
+
+    title.textContent = label?.textContent?.trim() ||
+      page.replaceAll("-", " ").replace(/\b\w/g, char =>
+        char.toUpperCase()
+      );
+  }
+
+  window.dispatchEvent(new CustomEvent("mathclass:pagechange", {
+    detail: {
+      page,
+      role: state.role,
+      user: state.user
+    }
+  }));
+
+  closeNavigationDrawer();
+}
+
+function bindNavigation() {
+  document.addEventListener("click", event => {
+    const link = event.target.closest("[data-route]");
+
+    if (!link) return;
+
+    event.preventDefault();
+
+    const page = link.dataset.route;
+
+    if (page) showPage(page);
+  });
+
+  $$(
+    "#menuToggle, #sidebarToggle, [data-action='toggle-navigation']"
+  ).forEach(button => {
+    button.addEventListener("click", toggleNavigationDrawer);
+  });
+
+  $$(
+    "#closeSidebar, [data-action='close-navigation']"
+  ).forEach(button => {
+    button.addEventListener("click", closeNavigationDrawer);
+  });
+}
+
+function toggleNavigationDrawer() {
+  document.body.classList.toggle("drawer-open");
+
+  const drawer = findElement(
+    "#sidebar",
+    "#appSidebar",
+    "[data-navigation-drawer]"
+  );
+
+  const open = document.body.classList.contains("drawer-open");
+
+  drawer?.setAttribute("aria-expanded", String(open));
+}
+
+function closeNavigationDrawer() {
+  document.body.classList.remove("drawer-open");
+
+  const drawer = findElement(
+    "#sidebar",
+    "#appSidebar",
+    "[data-navigation-drawer]"
+  );
+
+  drawer?.setAttribute("aria-expanded", "false");
+}
+
+// ============================================================
+// USER PROFILE DISPLAY
+// ============================================================
+
+function updateUserInterface(user, profile, role) {
+  const displayName =
+    profile?.name ||
+    user.displayName ||
+    user.email?.split("@")[0] ||
+    "Student";
+
+  const email = profile?.email || user.email || "";
+
+  $$(
+    "#userName, #profileName, [data-user-name]"
+  ).forEach(element => {
+    element.textContent = displayName;
+  });
+
+  $$(
+    "#userEmail, #profileEmail, [data-user-email]"
+  ).forEach(element => {
+    element.textContent = email;
+  });
+
+  $$(
+    "#userAvatar, #profileAvatar, [data-user-avatar]"
+  ).forEach(element => {
+    element.textContent = displayName
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(part => part[0])
+      .join("")
+      .toUpperCase();
+  });
+
+  updateRoleVisibility(role);
+}
+
+// ============================================================
+// MODULE INITIALIZATION
+// ============================================================
+
+async function initializeRoleModule(role) {
+  const modulePaths = {
+    student: "./student.js",
+    teacher: "./teacher.js",
+    admin: "./admin.js"
+  };
+
+  const path = modulePaths[role];
+
+  if (!path) return;
+
   try {
-    const result = callback();
+    const module = await import(path);
 
-    if (result && typeof result.catch === 'function') {
-      result.catch(error => {
-        console.error(`${label} initialisation failed:`, error);
-        showToast(`${label} could not be fully loaded.`, 'error');
-        hidePreloader();
+    if (typeof module.init === "function") {
+      await module.init({
+        auth,
+        db,
+        user: state.user,
+        profile: state.profile,
+        role,
+        toast,
+        showPage,
+        getState: () => ({ ...state })
       });
     }
+
+    window.dispatchEvent(new CustomEvent("mathclass:module-ready", {
+      detail: { role }
+    }));
+
   } catch (error) {
-    console.error(`${label} initialisation failed:`, error);
-    showToast(`${label} could not be fully loaded.`, 'error');
+    // A role module may not exist until the next development phase.
+    console.warn(`[Math Class] ${role} module is not ready yet:`, error);
+
+    window.dispatchEvent(new CustomEvent("mathclass:module-error", {
+      detail: {
+        role,
+        message: error.message
+      }
+    }));
   }
 }
 
-function initialiseRoleModules() {
-  if (!state.user) return;
+// ============================================================
+// AUTHENTICATION STATE
+// ============================================================
 
-  if (!state.initialized.student) {
-    state.initialized.student = true;
+async function handleAuthState(user) {
+  const generation = ++state.authGeneration;
 
-    safeInitialise('Student features', () => {
-      initStudent(state.user);
-    });
-  }
+  showLoading(user ? "Loading your classroom..." : "Preparing sign in...");
 
-  if (state.role === 'teacher' && !state.initialized.teacher) {
-    state.initialized.teacher = true;
+  try {
+    if (!user) {
+      state.user = null;
+      state.profile = null;
+      state.role = null;
 
-    safeInitialise('Teacher dashboard', () => {
-      initTeacher(state.user);
-    });
-  }
+      showAuthView();
 
-  if (state.role === 'admin' && !state.initialized.admin) {
-    state.initialized.admin = true;
+      state.initialized = true;
+      hideLoading();
 
-    safeInitialise('Admin dashboard', () => {
-      initAdmin(state.user);
-    });
+      window.dispatchEvent(new CustomEvent("mathclass:auth-ready", {
+        detail: { user: null, role: null }
+      }));
+
+      return;
+    }
+
+    state.user = user;
+
+    const profile = await getUserProfile(user);
+
+    // Ignore stale requests when the auth state changes mid-request.
+    if (generation !== state.authGeneration) return;
+
+    state.profile = profile;
+    state.role = normalizeRole(profile);
+
+    showApplicationView();
+
+    updateUserInterface(user, profile, state.role);
+
+    await initializeRoleModule(state.role);
+
+    if (generation !== state.authGeneration) return;
+
+    state.initialized = true;
+
+    showPage(
+      canAccessPage(state.currentPage, state.role)
+        ? state.currentPage
+        : "dashboard"
+    );
+
+    window.dispatchEvent(new CustomEvent("mathclass:auth-ready", {
+      detail: {
+        user,
+        profile: state.profile,
+        role: state.role
+      }
+    }));
+
+  } catch (error) {
+    console.error("[Math Class] Application initialization failed:", error);
+
+    if (generation !== state.authGeneration) return;
+
+    state.initialized = true;
+
+    if (user) {
+      showApplicationView();
+
+      toast(
+        "Your account is signed in, but your profile could not be loaded. Check Firebase permissions and try again.",
+        "error",
+        6000
+      );
+
+      showFatalError(
+        "We couldn't load your account profile. Verify your Realtime Database rules and internet connection, then refresh."
+      );
+    } else {
+      showAuthView();
+      toast(readableError(error), "error");
+    }
+
+  } finally {
+    if (generation === state.authGeneration) {
+      hideLoading();
+    }
   }
 }
 
-/* -------------------------------------------------------
-   SPA NAVIGATION
-------------------------------------------------------- */
+// ============================================================
+// GLOBAL ERROR SAFETY
+// ============================================================
 
-const pageInformation = {
-  profile: {
-    title: 'Your profile',
-    subtitle: 'Manage your classroom information'
+window.addEventListener("unhandledrejection", event => {
+  console.error("[Math Class] Unhandled promise rejection:", event.reason);
+
+  // Prevent silent failures from becoming invisible to the user.
+  if (event.reason) {
+    toast(
+      "An operation failed. Please try again.",
+      "error"
+    );
+  }
+});
+
+window.addEventListener("error", event => {
+  console.error("[Math Class] JavaScript error:", event.error);
+});
+
+// ============================================================
+// PUBLIC APPLICATION API
+// ============================================================
+
+window.MathClass = {
+  toast,
+  showLoading,
+  hideLoading,
+  showPage,
+  signOut: () => signOut(auth),
+
+  getState() {
+    return {
+      user: state.user,
+      profile: state.profile,
+      role: state.role,
+      online: state.online,
+      initialized: state.initialized,
+      currentPage: state.currentPage
+    };
   },
-  notices: {
-    title: 'Class notices',
-    subtitle: 'Announcements and learning materials'
-  },
-  tracker: {
-    title: 'Study tracker',
-    subtitle: 'Track your daily learning progress'
-  },
-  'class-chat': {
-    title: 'Class chat',
-    subtitle: 'Discuss maths with your classmates'
-  },
-  'ask-doubt': {
-    title: 'Ask a doubt',
-    subtitle: 'Private communication with your teacher'
-  },
-  'teacher-dashboard': {
-    title: 'Teacher dashboard',
-    subtitle: 'Announcements and student verification'
-  },
-  'doubt-inbox': {
-    title: 'Doubt inbox',
-    subtitle: 'Private student conversations'
-  },
-  'admin-panel': {
-    title: 'Admin panel',
-    subtitle: 'Manage roles and classroom moderation'
+
+  refreshProfile: async () => {
+    if (!auth.currentUser) {
+      throw new Error("No user is signed in.");
+    }
+
+    const profile = await getUserProfile(auth.currentUser);
+
+    state.profile = profile;
+    state.role = normalizeRole(profile);
+
+    updateUserInterface(auth.currentUser, profile, state.role);
+
+    return profile;
   }
 };
 
-function setPage(page) {
-  const pageElement = $(`page-${page}`);
+// ============================================================
+// START APPLICATION
+// ============================================================
 
-  if (!pageElement || pageElement.classList.contains('hidden') &&
-      !document.querySelector(`[data-page="${page}"]:not(.hidden)`)) {
-    // A section may be accessible directly after the role has changed,
-    // but unavailable pages should not be shown.
-    if (!pageElement || !document.querySelector(`[data-page="${page}"]:not(.hidden)`)) {
-      return;
-    }
-  }
+function startApplication() {
+  showLoading("Preparing your classroom...");
 
-  if (state.role === 'student' &&
-      ['teacher-dashboard', 'doubt-inbox', 'admin-panel'].includes(page)) {
-    return;
-  }
+  setupConnectionMonitor();
+  bindAuthenticationForms();
+  bindNavigation();
 
-  if (state.role === 'teacher' && page === 'admin-panel') {
-    return;
-  }
+  onAuthStateChanged(auth, handleAuthState, error => {
+    console.error("[Math Class] Authentication listener failed:", error);
 
-  if (state.role === 'admin' && page !== 'admin-panel') {
-    return;
-  }
+    state.initialized = true;
+    hideLoading();
 
-  document.querySelectorAll('.page-section').forEach(section => {
-    section.classList.add('hidden');
-  });
-
-  pageElement.classList.remove('hidden');
-
-  document.querySelectorAll('[data-page]').forEach(button => {
-    button.classList.toggle('active', button.dataset.page === page);
-  });
-
-  const info = pageInformation[page] || {
-    title: 'Classroom',
-    subtitle: ''
-  };
-
-  if ($('pageTitle')) $('pageTitle').textContent = info.title;
-  if ($('pageSubtitle')) $('pageSubtitle').textContent = info.subtitle;
-
-  state.activePage = page;
-
-  closeMobileSidebar();
-}
-
-function openMobileSidebar() {
-  $('sidebar')?.classList.add('sidebar-open');
-  $('sidebarBackdrop')?.classList.add('visible');
-}
-
-function closeMobileSidebar() {
-  $('sidebar')?.classList.remove('sidebar-open');
-  $('sidebarBackdrop')?.classList.remove('visible');
-}
-
-/* -------------------------------------------------------
-   PROFILE FORM
-------------------------------------------------------- */
-
-async function saveProfile(event) {
-  event.preventDefault();
-
-  if (!state.user) return;
-
-  const displayName = $('profileName')?.value.trim();
-  const rollValue = $('profileRoll')?.value;
-
-  if (!displayName) {
-    showToast('Please enter your name.', 'error');
-    return;
-  }
-
-  const rollNumber = Number(rollValue || 0);
-
-  if (!Number.isInteger(rollNumber) || rollNumber < 0) {
-    showToast('Please enter a valid roll number.', 'error');
-    return;
-  }
-
-  const button = $('profileForm')?.querySelector('button[type="submit"]');
-
-  setButtonBusy(button, true, 'Saving...');
-
-  try {
-    await update(ref(db, `users/${state.user.uid}`), {
-      displayName,
-      rollNumber,
-      email: state.user.email || ''
-    });
-
-    state.profile = {
-      ...state.profile,
-      displayName,
-      rollNumber,
-      email: state.user.email || ''
-    };
-
-    updateUserInterface();
-
-    showToast('Profile updated successfully.', 'success');
-
-  } catch (error) {
-    console.error('Profile update failed:', error);
-    showToast(getFriendlyError(error), 'error');
-
-  } finally {
-    setButtonBusy(button, false);
-  }
-}
-
-/* -------------------------------------------------------
-   SIGN OUT
-------------------------------------------------------- */
-
-async function handleLogout() {
-  const button = $('logoutButton');
-
-  setButtonBusy(button, true, 'Signing out...');
-
-  try {
-    await signOut(auth);
-    showToast('You have signed out.', 'success');
-  } catch (error) {
-    console.error('Sign out failed:', error);
-    showToast(getFriendlyError(error), 'error');
-  } finally {
-    setButtonBusy(button, false);
-  }
-}
-
-/* -------------------------------------------------------
-   AUTHENTICATION STATE
-------------------------------------------------------- */
-
-function startAuthenticationListener() {
-  if (authListenerStarted) return;
-
-  authListenerStarted = true;
-  updateLoadingText('Checking your account...');
-
-  onAuthStateChanged(
-    auth,
-
-    async user => {
-      try {
-        if (user) {
-          await hydrateUser(user);
-        } else {
-          state.user = null;
-          state.profile = null;
-          state.role = null;
-          state.activePage = null;
-
-          showLoginScreen();
-
-          hidePreloader();
-          clearTimeout(emergencyLoaderTimer);
-        }
-      } catch (error) {
-        console.error('Authentication state processing failed:', error);
-
-        // Crucial: do not leave the user looking at an endless loader.
-        hidePreloader();
-        clearTimeout(emergencyLoaderTimer);
-
-        if (auth.currentUser) {
-          showAppScreen();
-          showToast(
-            'Some classroom features could not load. Check your connection and Firebase permissions.',
-            'error'
-          );
-        } else {
-          showLoginScreen();
-        }
-      }
-    },
-
-    error => {
-      console.error('Firebase authentication listener failed:', error);
-
-      hidePreloader();
-      clearTimeout(emergencyLoaderTimer);
-
-      showLoginScreen();
-
-      setAuthMessage(
-        'Authentication could not be checked. Please reload the page or check your connection.',
-        true
-      );
-    }
-  );
-}
-
-/* -------------------------------------------------------
-   STARTUP
-------------------------------------------------------- */
-
-function initialiseInterface() {
-  $('loginTab')?.addEventListener('click', () => setAuthMode('login'));
-
-  $('registerTab')?.addEventListener('click', () => setAuthMode('register'));
-
-  $('authForm')?.addEventListener('submit', handleAuthSubmit);
-
-  $('forgotPassword')?.addEventListener('click', handlePasswordReset);
-
-  $('logoutButton')?.addEventListener('click', handleLogout);
-
-  $('profileForm')?.addEventListener('submit', saveProfile);
-
-  $('menuButton')?.addEventListener('click', openMobileSidebar);
-
-  $('sidebarBackdrop')?.addEventListener('click', closeMobileSidebar);
-
-  document.querySelectorAll('[data-page]').forEach(button => {
-    button.addEventListener('click', () => {
-      setPage(button.dataset.page);
-    });
-  });
-
-  // The initial auth state callback controls the actual screen.
-  setAuthMode('login');
-
-  if ($('studyDate') && !$('studyDate').value) {
-    $('studyDate').value = localDateString();
-  }
-}
-
-function startApp() {
-  try {
-    initialiseInterface();
-    startAuthenticationListener();
-  } catch (error) {
-    console.error('Application startup failed:', error);
-
-    hidePreloader();
-    clearTimeout(emergencyLoaderTimer);
-
-    showLoginScreen();
-
-    setAuthMessage(
-      'The application could not start correctly. Check your JavaScript imports and reload.',
-      true
+    showFatalError(
+      "Authentication could not be initialized. Check your Firebase configuration and enabled sign-in methods."
     );
-  }
+  });
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', startApp, { once: true });
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startApplication, {
+    once: true
+  });
 } else {
-  startApp();
-                  }
+  startApplication();
+}
