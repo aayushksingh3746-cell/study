@@ -1,201 +1,309 @@
-import { auth, db } from './firebase-config.js';
+import { db } from './firebase-config.js';
 
 import {
   ref,
   get,
-  onValue,
   update,
-  remove
+  remove,
+  onValue,
+  query,
+  limitToLast
 } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js';
 
-import {
-  $,
-  ADMIN_UID,
-  escapeHTML,
-  formatDate,
-  toArray,
-  showToast
-} from './app.js';
+let initialised = false;
+let currentUser = null;
+let chatListenerStarted = false;
 
-let initialized = false;
-let chatListener = null;
-let usersListener = null;
-let logsListener = null;
-let chatMessages = [];
-let users = {};
-let studyLogs = {};
+const $ = id => document.getElementById(id);
 
-function isAdministrator() {
-  return auth.currentUser?.uid === ADMIN_UID;
+function classroom() {
+  return window.classroom || {};
 }
 
-function renderAdminStats() {
-  $('adminStatUsers').textContent = Object.keys(users).length;
-  $('adminStatMessages').textContent = chatMessages.length;
-  $('adminStatLogs').textContent = Object.keys(studyLogs).length;
+function escapeHTML(value) {
+  return classroom().escapeHTML
+    ? classroom().escapeHTML(value)
+    : String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[c]);
 }
 
-function renderModeratorChat() {
-  const container = $('moderatorChatList');
-
-  $('moderatorCount').textContent =
-    `${chatMessages.length} message${chatMessages.length === 1 ? '' : 's'}`;
-
-  if (!chatMessages.length) {
-    container.innerHTML = '<div class="empty-state m-4">No messages to moderate.</div>';
-    return;
-  }
-
-  container.innerHTML = [...chatMessages].reverse().map(message => `
-    <article class="p-4 sm:p-5 flex items-start gap-3">
-      <div class="avatar">${escapeHTML((message.displayName || 'U').charAt(0).toUpperCase())}</div>
-
-      <div class="min-w-0 flex-1">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="font-semibold text-sm">${escapeHTML(message.displayName || 'Student')}</span>
-          <span class="muted text-xs">${escapeHTML(formatDate(message.timestamp))}</span>
-        </div>
-
-        <p class="text-sm mt-2 whitespace-pre-wrap break-words">${escapeHTML(message.message || '')}</p>
-        <p class="muted text-[10px] mt-2 break-all">UID: ${escapeHTML(message.uid || 'Unknown')}</p>
-      </div>
-
-      <button type="button"
-        class="danger-btn text-xs shrink-0"
-        data-delete-chat="${escapeHTML(message.id)}"
-        aria-label="Delete message">
-        <i class="fa-solid fa-trash"></i>
-        <span>Delete</span>
-      </button>
-    </article>
-  `).join('');
+function toast(message, type = 'info') {
+  classroom().showToast?.(message, type);
 }
 
-async function grantTeacherRole(event) {
-  event.preventDefault();
-
-  if (!isAdministrator()) {
-    showToast('Only the designated administrator can change roles.', 'error');
-    return;
+function formatTime(timestamp) {
+  if (classroom().formatTime) {
+    return classroom().formatTime(timestamp);
   }
 
-  const uid = $('targetUid').value.trim();
-
-  if (!uid || uid.length < 10 || uid.length > 128) {
-    showToast('Enter a valid Firebase UID.', 'error');
-    return;
-  }
-
-  if (uid === ADMIN_UID) {
-    showToast('The administrator role cannot be changed here.', 'error');
-    return;
-  }
-
-  const button = $('makeTeacherBtn');
-  button.disabled = true;
-  button.textContent = 'Updating role...';
-
-  try {
-    const snapshot = await get(ref(db, `users/${uid}`));
-
-    if (!snapshot.exists()) {
-      throw new Error('No user profile exists for that UID. The user must register first.');
-    }
-
-    await update(ref(db, `users/${uid}`), {
-      role: 'teacher'
-    });
-
-    $('roleForm').reset();
-    showToast('Teacher role granted successfully.', 'success');
-  } catch (error) {
-    console.error(error);
-    showToast(error.message || 'Unable to update the user role.', 'error');
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Grant teacher role';
-  }
+  return timestamp ? new Date(timestamp).toLocaleString() : '';
 }
 
-async function deleteChatMessage(event) {
-  const button = event.target.closest('[data-delete-chat]');
+function setBusy(button, busy, text = 'Please wait...') {
   if (!button) return;
 
-  if (!isAdministrator()) {
-    showToast('Only the administrator can moderate chat.', 'error');
-    return;
+  if (busy) {
+    if (!button.dataset.originalHtml) {
+      button.dataset.originalHtml = button.innerHTML;
+    }
+
+    button.disabled = true;
+    button.innerHTML =
+      `<i class="fa-solid fa-spinner fa-spin mr-2"></i>${escapeHTML(text)}`;
+  } else {
+    button.disabled = false;
+
+    if (button.dataset.originalHtml) {
+      button.innerHTML = button.dataset.originalHtml;
+      delete button.dataset.originalHtml;
+    }
   }
+}
 
-  const messageId = button.dataset.deleteChat;
+/* -------------------------------------------------------
+   ADMIN ROLE FORM
+------------------------------------------------------- */
 
-  if (!confirm('Permanently delete this chat message?')) return;
+function initRoleForm() {
+  const form = $('roleForm');
 
-  button.disabled = true;
+  if (!form || form.dataset.initialised === 'true') return;
+
+  form.dataset.initialised = 'true';
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+
+    if (!currentUser) return;
+
+    const email = $('roleEmail')?.value.trim().toLowerCase();
+    const button = $('assignTeacherButton');
+
+    if (!email) {
+      toast('Enter the registered email address.', 'error');
+      return;
+    }
+
+    setBusy(button, true, 'Searching...');
+
+    try {
+      /*
+       * Firebase client SDK cannot enumerate Firebase Authentication
+       * accounts by email. This searches the Realtime Database users
+       * collection for a matching email instead.
+       *
+       * The current database rules must allow the administrator to read
+       * the users collection and update the selected user's role.
+       */
+
+      const snapshot = await get(ref(db, 'users'));
+
+      if (!snapshot.exists()) {
+        toast('No user profiles were found.', 'error');
+        return;
+      }
+
+      let matchedUID = null;
+      let matchedProfile = null;
+
+      snapshot.forEach(child => {
+        const profile = child.val() || '';
+
+        if (
+          profile &&
+          typeof profile === 'object' &&
+          String(profile.email || '').trim().toLowerCase() === email
+        ) {
+          matchedUID = child.key;
+          matchedProfile = profile;
+        }
+      });
+
+      if (!matchedUID || !matchedProfile) {
+        toast(
+          'No matching registered profile was found. Ask the user to sign in and create their profile first.',
+          'error'
+        );
+        return;
+      }
+
+      if (matchedUID === currentUser.uid) {
+        toast('You cannot change your own administrator role here.', 'error');
+        return;
+      }
+
+      if (matchedProfile.role === 'admin') {
+        toast('This user already has the administrator role.', 'error');
+        return;
+      }
+
+      await update(ref(db, `users/${matchedUID}`), {
+        role: 'teacher',
+        roleUpdatedAt: Date.now(),
+        roleUpdatedBy: currentUser.uid
+      });
+
+      form.reset();
+
+      toast(
+        `Teacher role assigned to ${matchedProfile.displayName || email}.`,
+        'success'
+      );
+
+    } catch (error) {
+      console.error('Role assignment failed:', error);
+
+      toast(
+        'Could not assign the role. Check that your administrator database rules allow this operation.',
+        'error'
+      );
+    } finally {
+      setBusy(button, false);
+    }
+  });
+}
+
+/* -------------------------------------------------------
+   CLASS CHAT MODERATION
+------------------------------------------------------- */
+
+function initChatModeration() {
+  if (chatListenerStarted) return;
+
+  chatListenerStarted = true;
+
+  const container = $('adminChatMessages');
+  if (!container) return;
+
+  container.innerHTML =
+    '<p class="muted text-sm">Loading class chat...</p>';
+
+  onValue(
+    query(ref(db, 'class_chat'), limitToLast(150)),
+
+    snapshot => {
+      if (!snapshot.exists()) {
+        container.innerHTML =
+          '<p class="muted text-sm">There are no class messages to moderate.</p>';
+        return;
+      }
+
+      const messages = [];
+
+      snapshot.forEach(child => {
+        messages.push({
+          id: child.key,
+          ...child.val()
+        });
+      });
+
+      messages.sort((a, b) =>
+        Number(b.timestamp || 0) - Number(a.timestamp || 0)
+      );
+
+      container.innerHTML = messages.map(message => `
+        <article class="rounded-xl border border-slate-700/50 bg-slate-950/30 p-4">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-semibold">
+                ${escapeHTML(message.displayName || 'Class member')}
+              </p>
+
+              <p class="muted text-xs mt-1">
+                ${escapeHTML(formatTime(message.timestamp))}
+              </p>
+            </div>
+
+            <button type="button"
+                    class="secondary-btn text-xs text-rose-300"
+                    data-delete-message="${escapeHTML(message.id)}">
+              <i class="fa-regular fa-trash-can mr-1"></i>
+              Delete
+            </button>
+          </div>
+
+          <p class="text-sm mt-3 whitespace-pre-wrap break-words">${
+            escapeHTML(message.text || '')
+          }</p>
+        </article>
+      `).join('');
+    },
+
+    error => {
+      console.error('Chat moderation listener failed:', error);
+
+      container.innerHTML = `
+        <div class="content-card">
+          <p class="text-rose-300">Unable to load class chat.</p>
+          <p class="muted text-sm mt-2">
+            Check the Realtime Database rules for administrator access.
+          </p>
+        </div>
+      `;
+    }
+  );
+
+  if (!container.dataset.initialised) {
+    container.dataset.initialised = 'true';
+
+    container.addEventListener('click', async event => {
+      const button = event.target.closest('[data-delete-message]');
+
+      if (!button) return;
+
+      const messageID = button.dataset.deleteMessage;
+
+      if (!messageID) return;
+
+      const confirmed = window.confirm(
+        'Are you sure you want to permanently delete this class chat message?'
+      );
+
+      if (!confirmed) return;
+
+      setBusy(button, true, 'Deleting...');
+
+      try {
+        await remove(ref(db, `class_chat/${messageID}`));
+
+        toast('Chat message deleted.', 'success');
+
+      } catch (error) {
+        console.error('Chat message deletion failed:', error);
+
+        toast(
+          'Message could not be deleted. Check your Firebase administrator permissions.',
+          'error'
+        );
+      } finally {
+        setBusy(button, false);
+      }
+    });
+  }
+}
+
+/* -------------------------------------------------------
+   MODULE ENTRY POINT
+------------------------------------------------------- */
+
+export function initAdmin(user) {
+  if (!user) return;
+
+  if (initialised && currentUser?.uid === user.uid) return;
+
+  initialised = true;
+  currentUser = user;
 
   try {
-    await remove(ref(db, `class_chat/${messageId}`));
-    showToast('Message deleted successfully.', 'success');
+    initRoleForm();
+    initChatModeration();
   } catch (error) {
-    console.error(error);
-    showToast(error.message || 'Unable to delete the message.', 'error');
-  } finally {
-    button.disabled = false;
+    console.error('Admin module startup failed:', error);
+    toast('Some administrator features could not start.', 'error');
   }
 }
-
-function bindAdminData() {
-  if (chatListener) chatListener();
-  if (usersListener) usersListener();
-  if (logsListener) logsListener();
-
-  chatListener = onValue(ref(db, 'class_chat'), snapshot => {
-    chatMessages = toArray(snapshot.val())
-      .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
-
-    renderModeratorChat();
-    renderAdminStats();
-  }, error => {
-    console.error(error);
-    $('moderatorChatList').innerHTML =
-      `<div class="empty-state m-4">${escapeHTML(error.message)}</div>`;
-  });
-
-  usersListener = onValue(ref(db, 'users'), snapshot => {
-    users = snapshot.val() || {};
-    renderAdminStats();
-  }, error => console.error('Unable to load users:', error));
-
-  logsListener = onValue(ref(db, 'daily_study_logs'), snapshot => {
-    studyLogs = snapshot.val() || {};
-    renderAdminStats();
-  }, error => console.error('Unable to load study logs:', error));
-}
-
-export async function initializeAdmin() {
-  if (!isAdministrator()) {
-    showToast('Administrator access denied.', 'error');
-    return;
-  }
-
-  if (!initialized) {
-    $('roleForm').addEventListener('submit', grantTeacherRole);
-    $('moderatorChatList').addEventListener('click', deleteChatMessage);
-    initialized = true;
-  }
-
-  bindAdminData();
-}
-
-document.addEventListener('studyspace:logout', () => {
-  if (chatListener) chatListener();
-  if (usersListener) usersListener();
-  if (logsListener) logsListener();
-
-  chatListener = null;
-  usersListener = null;
-  logsListener = null;
-
-  chatMessages = [];
-  users = {};
-  studyLogs = {};
-});
