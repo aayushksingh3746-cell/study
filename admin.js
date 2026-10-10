@@ -10,7 +10,6 @@ import {
   get,
   set,
   update,
-  remove,
   push,
   onValue,
   off,
@@ -21,13 +20,7 @@ import {
 
 import {
   escapeHTML,
-  formatDate,
-  formatDateTime,
-  createEmptyState,
-  createButton,
-  openModal,
-  confirmDialog,
-  makeButton
+  formatDateTime
 } from "./components.js";
 
 /* ============================================================
@@ -36,20 +29,19 @@ import {
 
 const ADMIN_CONFIG = {
   USERS_PATH: "users",
-  CHAT_PATH: "classChat",
+  CHAT_PATH: "class_chat",
   AUDIT_PATH: "auditLogs",
   LOG_LIMIT: 100,
   CHAT_LIMIT: 100
 };
 
-const ADMIN_COLORS = {
-  primary: "#4F46E5",
-  purple: "#7C3AED",
-  success: "#16A34A",
-  warning: "#D97706",
-  danger: "#DC2626",
-  muted: "#64748B"
-};
+const ALLOWED_ADMIN_PAGES = [
+  "dashboard",
+  "roles",
+  "moderation",
+  "audit",
+  "system"
+];
 
 /* ============================================================
    STATE
@@ -71,8 +63,8 @@ let auditCache = {};
 
 let listeners = [];
 let initialized = false;
-let busy = false;
 let disposed = false;
+let loading = false;
 
 let pageContainer = null;
 let pageChangeHandler = null;
@@ -82,17 +74,15 @@ let pageChangeHandler = null;
    ============================================================ */
 
 function escape(value) {
-  if (typeof escapeHTML === "function") {
-    return escapeHTML(String(value ?? ""));
-  }
-
-  return String(value ?? "").replace(/[&<>"']/g, character => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  })[character]);
+  return typeof escapeHTML === "function"
+    ? escapeHTML(String(value ?? ""))
+    : String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      })[character]);
 }
 
 function currentUID() {
@@ -105,19 +95,18 @@ function notify(message, type = "info") {
     return;
   }
 
-  const existing = document.querySelector("[data-admin-toast]");
-
-  if (existing) existing.remove();
+  document.querySelector("[data-admin-toast]")?.remove();
 
   const toast = document.createElement("div");
   toast.dataset.adminToast = "true";
   toast.textContent = message;
+  toast.setAttribute("role", "status");
 
   Object.assign(toast.style, {
     position: "fixed",
-    right: "20px",
-    bottom: "20px",
-    zIndex: "99999",
+    right: "16px",
+    bottom: "16px",
+    zIndex: "999999",
     padding: "14px 18px",
     borderRadius: "12px",
     background: type === "error"
@@ -137,35 +126,44 @@ function notify(message, type = "info") {
 }
 
 function timestamp(value) {
-  if (!value) return 0;
+  if (value == null) return 0;
 
-  if (typeof value === "number") {
-    return value;
-  }
+  if (typeof value === "number") return value;
 
   if (typeof value === "string") {
     const parsed = Date.parse(value);
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  if (typeof value === "object" && value.seconds) {
-    return value.seconds * 1000;
+  if (typeof value === "object") {
+    if (typeof value.seconds === "number") {
+      return value.seconds * 1000;
+    }
+
+    if (typeof value[".sv"] === "string") {
+      return 0;
+    }
   }
 
   return 0;
 }
 
 function dateText(value) {
-  if (!value) return "Not available";
+  if (value == null) return "Not available";
 
   try {
     if (typeof formatDateTime === "function") {
-      return formatDateTime(value);
+      const formatted = formatDateTime(value);
+
+      if (formatted) return String(formatted);
     }
 
-    const date = new Date(
-      typeof value === "number" ? value : timestamp(value)
-    );
+    const milliseconds =
+      typeof value === "number" ? value : timestamp(value);
+
+    if (!milliseconds) return "Not available";
+
+    const date = new Date(milliseconds);
 
     return Number.isNaN(date.getTime())
       ? "Not available"
@@ -177,35 +175,51 @@ function dateText(value) {
 
 function roleOf(profile = {}) {
   return String(
-    profile.role ||
-    profile.accountType ||
+    profile?.role ||
+    profile?.accountType ||
     "student"
-  ).toLowerCase();
+  ).trim().toLowerCase();
 }
 
 function displayName(profile = {}, uid = "") {
   return (
-    profile.displayName ||
-    profile.name ||
-    profile.fullName ||
-    profile.email ||
+    profile?.displayName ||
+    profile?.name ||
+    profile?.fullName ||
+    profile?.email ||
     (uid ? `User ${uid.slice(0, 7)}` : "Unknown user")
   );
 }
 
 function emailOf(profile = {}) {
-  return profile.email || "No email provided";
+  return profile?.email || "No email provided";
 }
 
 function normalizeStatus(value) {
-  return String(value || "active").toLowerCase();
+  return String(value || "active").trim().toLowerCase();
 }
 
 function isSuspended(profile = {}) {
-  return profile.disabled === true ||
-    profile.suspended === true ||
-    normalizeStatus(profile.status) === "suspended" ||
-    normalizeStatus(profile.status) === "disabled";
+  const status = normalizeStatus(profile?.status);
+
+  return profile?.disabled === true ||
+    profile?.suspended === true ||
+    status === "suspended" ||
+    status === "disabled";
+}
+
+function isPlainObject(value) {
+  return value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value);
+}
+
+function normalizeRecords(value) {
+  if (!isPlainObject(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => isPlainObject(item))
+  );
 }
 
 function statusBadge(status) {
@@ -216,12 +230,14 @@ function statusBadge(status) {
     student: ["#DBEAFE", "#1D4ED8"],
     teacher: ["#EDE9FE", "#6D28D9"],
     admin: ["#FCE7F3", "#9D174D"],
+    administrator: ["#FCE7F3", "#9D174D"],
     suspended: ["#FEE2E2", "#991B1B"],
     disabled: ["#FEE2E2", "#991B1B"],
     deleted: ["#F1F5F9", "#475569"],
     resolved: ["#DCFCE7", "#166534"],
     pending: ["#FEF3C7", "#92400E"],
-    flagged: ["#FEE2E2", "#991B1B"]
+    flagged: ["#FEE2E2", "#991B1B"],
+    hidden: ["#F1F5F9", "#475569"]
   };
 
   const palette = colors[value] || ["#F1F5F9", "#475569"];
@@ -396,6 +412,7 @@ function loadingState(message = "Loading administrator data…") {
       <span style="
         width:20px;
         height:20px;
+        flex-shrink:0;
         border:2px solid #E0E7FF;
         border-top-color:#4F46E5;
         border-radius:50%;
@@ -463,9 +480,7 @@ function tableWrapper(headers, rows, emptyMessage = "No records found.") {
           </tr>
         </thead>
 
-        <tbody>
-          ${rows.join("")}
-        </tbody>
+        <tbody>${rows.join("")}</tbody>
       </table>
     </div>
   `;
@@ -487,20 +502,25 @@ function tableRow(cells) {
 }
 
 function safeError(error) {
-  const code = error?.code || "";
+  const code = String(error?.code || "").toLowerCase();
 
   if (
     code.includes("permission-denied") ||
-    code.includes("PERMISSION_DENIED")
+    code.includes("permission_denied")
   ) {
-    return "Access denied by Firebase Security Rules. Verify your admin permissions and database rules.";
+    return "Firebase denied this operation. Check the Realtime Database Rules and confirm that your account has administrator permissions.";
   }
 
   if (
     code.includes("network") ||
-    code.includes("unavailable")
+    code.includes("unavailable") ||
+    code.includes("disconnected")
   ) {
-    return "A network problem occurred. Check your connection and try again.";
+    return "Firebase could not be reached. Check your internet connection and try again.";
+  }
+
+  if (code.includes("unauthenticated")) {
+    return "Your session has expired. Sign in again.";
   }
 
   return error?.message || "An unexpected error occurred.";
@@ -509,13 +529,13 @@ function safeError(error) {
 function setPageContent(html) {
   if (!pageContainer || !pageContainer.isConnected) {
     pageContainer = document.querySelector(
-      "#page-content, #app-content, #main-content, [data-page-content], main"
+      "#page-content, #app-content, #main-content, #pageContent, #appView, [data-page-content], main"
     );
   }
 
   if (!pageContainer) {
     console.error(
-      "[Admin] Could not find a page container. Check the app shell in index.html."
+      "[Admin] Could not find the application content container."
     );
     return;
   }
@@ -539,7 +559,6 @@ function addSpinnerStyle() {
       border-color:#818CF8 !important;
     }
 
-    .admin-action:focus-visible,
     [data-admin-action]:focus-visible {
       outline:3px solid #A5B4FC;
       outline-offset:2px;
@@ -560,11 +579,11 @@ function addSpinnerStyle() {
    ============================================================ */
 
 function detachListeners() {
-  listeners.forEach(({ databaseRef, handler }) => {
+  listeners.forEach(({ targetRef, handler }) => {
     try {
-      off(databaseRef, "value", handler);
+      off(targetRef, "value", handler);
     } catch (error) {
-      console.warn("[Admin] Listener cleanup:", error);
+      console.warn("[Admin] Listener cleanup failed:", error);
     }
   });
 
@@ -577,38 +596,48 @@ function listen(path, callback, options = {}) {
     return;
   }
 
-  const databaseRef = ref(database, path);
+  const baseRef = ref(database, path);
   const targetRef = options.limit
-    ? query(databaseRef, limitToLast(options.limit))
-    : databaseRef;
+    ? query(baseRef, limitToLast(options.limit))
+    : baseRef;
 
   let firstResult = true;
 
   const handler = snapshot => {
+    if (disposed) return;
+
     const value = snapshot.exists() ? snapshot.val() : {};
 
     callback(value, null, firstResult);
     firstResult = false;
   };
 
+  const errorHandler = error => {
+    if (disposed) return;
+
+    callback(null, error, firstResult);
+    firstResult = false;
+  };
+
   listeners.push({
-    databaseRef: targetRef,
+    targetRef,
     handler
   });
 
-  onValue(
-    targetRef,
-    handler,
-    error => callback(null, error, firstResult)
-  );
+  onValue(targetRef, handler, errorHandler);
 }
 
-async function readPath(path) {
+async function readPath(path, options = {}) {
   if (!database) {
     throw new Error("Firebase Database is unavailable.");
   }
 
-  const snapshot = await get(ref(database, path));
+  const databaseRef = ref(database, path);
+  const targetRef = options.limit
+    ? query(databaseRef, limitToLast(options.limit))
+    : databaseRef;
+
+  const snapshot = await get(targetRef);
 
   return snapshot.exists() ? snapshot.val() : {};
 }
@@ -646,7 +675,7 @@ function verifyAdmin() {
 
   const role = roleOf(currentProfile);
 
-  if (role !== "admin" && role !== "administrator") {
+  if (!["admin", "administrator"].includes(role)) {
     return {
       allowed: false,
       message: "Your account does not have administrator access."
@@ -867,6 +896,8 @@ function adminShell(content) {
 }
 
 function renderCurrentPage() {
+  if (disposed) return;
+
   const access = verifyAdmin();
 
   if (!access.allowed) {
@@ -874,33 +905,29 @@ function renderCurrentPage() {
     return;
   }
 
-  let content;
-
   switch (currentPage) {
     case "roles":
-      content = renderRoleManager();
+      setPageContent(adminShell(renderRoleManager()));
       break;
 
     case "moderation":
-      content = renderModeration();
+      setPageContent(adminShell(renderModeration()));
       break;
 
     case "audit":
-      content = renderAuditLog();
+      setPageContent(adminShell(renderAuditLog()));
       break;
 
     case "system":
-      content = renderSystemStatus();
+      setPageContent(adminShell(renderSystemStatus()));
       break;
 
     case "dashboard":
     default:
       currentPage = "dashboard";
-      content = renderOverview();
+      setPageContent(adminShell(renderOverview()));
       break;
   }
-
-  setPageContent(adminShell(content));
 }
 
 /* ============================================================
@@ -910,7 +937,6 @@ function renderCurrentPage() {
 function renderOverview() {
   const users = Object.entries(usersCache);
   const chat = Object.entries(chatCache);
-  const audit = Object.entries(auditCache);
 
   const students = users.filter(([, user]) =>
     roleOf(user) === "student"
@@ -988,10 +1014,9 @@ function renderOverview() {
             <h3 style="margin:0 0 5px;font-size:16px;">Recent accounts</h3>
             <p style="margin:0;color:#64748B;font-size:12px;">Latest profiles in the database.</p>
           </div>
-          ${button("Manage users", "navigate", { variant: "primary" }).replace(
-            'data-admin-action="navigate"',
-            'data-admin-action="navigate" data-page="roles"'
-          )}
+
+          ${button("Manage users", "navigate", { variant: "primary" })
+            .replace('data-admin-action="navigate"', 'data-admin-action="navigate" data-page="roles"')}
         </div>
 
         ${tableWrapper(
@@ -1004,47 +1029,21 @@ function renderOverview() {
       ${card(`
         <h3 style="margin:0 0 8px;font-size:16px;">Administrative shortcuts</h3>
 
-        <p style="
-          margin:0 0 18px;
-          color:#64748B;
-          font-size:12px;
-          line-height:1.6;
-        ">Open a section to review the platform.</p>
+        <p style="margin:0 0 18px;color:#64748B;font-size:12px;line-height:1.6;">
+          Open a section to review the platform.
+        </p>
 
         <div style="display:grid;gap:10px;">
-          ${button("Manage user roles →", "navigate", { variant: "secondary" }).replace(
-            'data-admin-action="navigate"',
-            'data-admin-action="navigate" data-page="roles"'
-          )}
-
-          ${button("Review chat →", "navigate", { variant: "secondary" }).replace(
-            'data-admin-action="navigate"',
-            'data-admin-action="navigate" data-page="moderation"'
-          )}
-
-          ${button("View audit history →", "navigate", { variant: "secondary" }).replace(
-            'data-admin-action="navigate"',
-            'data-admin-action="navigate" data-page="audit"'
-          )}
-
-          ${button("Check system status →", "navigate", { variant: "secondary" }).replace(
-            'data-admin-action="navigate"',
-            'data-admin-action="navigate" data-page="system"'
-          )}
+          ${button("Manage user roles →", "navigate").replace('data-admin-action="navigate"', 'data-admin-action="navigate" data-page="roles"')}
+          ${button("Review chat →", "navigate").replace('data-admin-action="navigate"', 'data-admin-action="navigate" data-page="moderation"')}
+          ${button("View audit history →", "navigate").replace('data-admin-action="navigate"', 'data-admin-action="navigate" data-page="audit"')}
+          ${button("Check system status →", "navigate").replace('data-admin-action="navigate"', 'data-admin-action="navigate" data-page="system"')}
         </div>
 
-        <div style="
-          margin-top:20px;
-          padding:13px;
-          background:#F8FAFC;
-          border-radius:12px;
-          color:#64748B;
-          font-size:11px;
-          line-height:1.6;
-        ">
+        <div style="margin-top:20px;padding:13px;background:#F8FAFC;border-radius:12px;color:#64748B;font-size:11px;line-height:1.6;">
           <strong style="color:#334155;">Security reminder</strong><br>
-          Client-side role checks improve navigation but do not secure data.
-          Firebase Security Rules must enforce every privileged operation.
+          Client-side role checks do not secure the database. Firebase Rules
+          must enforce every privileged operation.
         </div>
       `)}
     </div>
@@ -1055,7 +1054,6 @@ function renderOverview() {
         <p style="margin:0 0 16px;color:#64748B;font-size:12px;">
           The latest recorded audit events.
         </p>
-
         ${renderRecentAudit(5)}
       `)}
     </div>
@@ -1071,39 +1069,24 @@ function renderRecentAudit(limit = 5) {
     .slice(0, limit);
 
   if (!entries.length) {
-    return `
-      <div style="padding:18px 0;color:#94A3B8;font-size:12px;">
-        No audit events have been recorded yet.
-      </div>
-    `;
+    return `<div style="padding:18px 0;color:#94A3B8;font-size:12px;">No audit events have been recorded yet.</div>`;
   }
 
   return `
     <div style="display:grid;gap:0;">
-      ${entries.map(([id, entry]) => `
-        <div style="
-          display:flex;
-          justify-content:space-between;
-          align-items:flex-start;
-          gap:15px;
-          padding:13px 0;
-          border-bottom:1px solid #F1F5F9;
-        ">
+      ${entries.map(([, entry]) => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:15px;padding:13px 0;border-bottom:1px solid #F1F5F9;">
           <div>
             <div style="color:#334155;font-size:12px;font-weight:700;">
               ${escape(entry.action || "Administrative activity")}
             </div>
-
             <div style="margin-top:4px;color:#64748B;font-size:11px;">
               ${escape(entry.performedByName || entry.performedBy || "Unknown administrator")}
             </div>
           </div>
-
-          <time style="
-            color:#94A3B8;
-            font-size:10px;
-            white-space:nowrap;
-          ">${escape(dateText(entry.createdAt || entry.serverCreatedAt))}</time>
+          <time style="color:#94A3B8;font-size:10px;white-space:nowrap;">
+            ${escape(dateText(entry.createdAt || entry.serverCreatedAt))}
+          </time>
         </div>
       `).join("")}
     </div>
@@ -1136,49 +1119,31 @@ function renderRoleManager() {
   });
 
   const rows = filtered.map(([uid, profile]) => {
-    const role = roleOf(profile);
     const suspended = isSuspended(profile);
-
-    const actionButtons = `
-      <div style="display:flex;gap:7px;flex-wrap:wrap;">
-        ${button("Edit role", "edit-role", { variant: "primary" })
-          .replace('data-admin-action="edit-role"', `data-admin-action="edit-role" data-uid="${escape(uid)}"`)}
-
-        ${button(
-          suspended ? "Reactivate" : "Suspend",
-          "toggle-user",
-          { variant: suspended ? "success" : "danger" }
-        ).replace(
-          'data-admin-action="toggle-user"',
-          `data-admin-action="toggle-user" data-uid="${escape(uid)}"`
-        )}
-      </div>
-    `;
 
     return tableRow([
       `<div style="font-weight:700;color:#111827;">${escape(displayName(profile, uid))}</div>
        <div style="margin-top:4px;color:#94A3B8;font-size:11px;">${escape(emailOf(profile))}</div>
        <div style="margin-top:4px;color:#CBD5E1;font-size:10px;">UID: ${escape(uid)}</div>`,
-      statusBadge(role),
+      statusBadge(roleOf(profile)),
       statusBadge(suspended ? "suspended" : "active"),
       escape(dateText(profile.createdAt)),
-      actionButtons
+      `<div style="display:flex;gap:7px;flex-wrap:wrap;">
+        ${button("Edit role", "edit-role", { variant: "primary" })
+          .replace('data-admin-action="edit-role"', `data-admin-action="edit-role" data-uid="${escape(uid)}"`)}
+
+        ${button(suspended ? "Reactivate" : "Suspend", "toggle-user", {
+          variant: suspended ? "success" : "danger"
+        }).replace('data-admin-action="toggle-user"', `data-admin-action="toggle-user" data-uid="${escape(uid)}"`)}
+      </div>`
     ]);
   });
 
   return `
-    ${sectionHeading(
-      "Role Manager",
-      "Review user profiles and manage application-level roles."
-    )}
+    ${sectionHeading("Role Manager", "Review user profiles and manage application-level roles.")}
 
     ${card(`
-      <div style="
-        display:flex;
-        flex-wrap:wrap;
-        gap:10px;
-        margin-bottom:18px;
-      ">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
         <input
           class="admin-input"
           id="admin-user-search"
@@ -1186,27 +1151,12 @@ function renderRoleManager() {
           value="${escape(searchTerm)}"
           placeholder="Search by name, email, UID or role…"
           aria-label="Search users"
-          style="
-            flex:1;
-            min-width:220px;
-            min-height:42px;
-            padding:10px 12px;
-            border:1px solid #E2E8F0;
-            border-radius:10px;
-            font:inherit;
-            font-size:12px;
-          "
+          style="flex:1;min-width:220px;min-height:42px;padding:10px 12px;border:1px solid #E2E8F0;border-radius:10px;font:inherit;font-size:12px;"
         />
-
-        ${button("Refresh", "refresh-users", { variant: "secondary" })}
+        ${button("Refresh", "refresh-users")}
       </div>
 
-      <div style="
-        display:flex;
-        flex-wrap:wrap;
-        gap:7px;
-        margin-bottom:18px;
-      ">
+      <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px;">
         ${[
           ["all", "All users"],
           ["students", "Students"],
@@ -1214,54 +1164,29 @@ function renderRoleManager() {
           ["admins", "Admins"],
           ["suspended", "Suspended"]
         ].map(([key, label]) => `
-          <button
-            type="button"
-            data-admin-action="role-tab"
-            data-tab="${key}"
-            style="
-              min-height:38px;
-              padding:8px 12px;
-              border-radius:9px;
-              border:1px solid ${activeTab === key ? "#C7D2FE" : "#E2E8F0"};
-              background:${activeTab === key ? "#EEF2FF" : "#FFFFFF"};
-              color:${activeTab === key ? "#4338CA" : "#64748B"};
-              font-size:11px;
-              font-weight:700;
-              cursor:pointer;
-            "
-          >${label}</button>
+          <button type="button" data-admin-action="role-tab" data-tab="${key}"
+            style="min-height:38px;padding:8px 12px;border-radius:9px;border:1px solid ${activeTab === key ? "#C7D2FE" : "#E2E8F0"};background:${activeTab === key ? "#EEF2FF" : "#FFFFFF"};color:${activeTab === key ? "#4338CA" : "#64748B"};font-size:11px;font-weight:700;cursor:pointer;">
+            ${label}
+          </button>
         `).join("")}
       </div>
 
-      <div style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        gap:10px;
-        margin-bottom:12px;
-      ">
-        <span style="color:#64748B;font-size:12px;">
-          ${filtered.length} matching account${filtered.length === 1 ? "" : "s"}
-        </span>
+      <div style="color:#64748B;font-size:12px;margin-bottom:12px;">
+        ${filtered.length} matching account${filtered.length === 1 ? "" : "s"}
       </div>
 
-      ${tableWrapper(
-        ["User", "Role", "Account status", "Created", "Actions"],
-        rows,
-        "No matching accounts were found."
-      )}
+      ${tableWrapper(["User", "Role", "Account status", "Created", "Actions"], rows, "No matching accounts were found.")}
     `)}
   `;
 }
 
 async function refreshUsers() {
   try {
-    const value = await readPath(ADMIN_CONFIG.USERS_PATH);
-    usersCache = value || {};
+    usersCache = normalizeRecords(await readPath(ADMIN_CONFIG.USERS_PATH));
     renderCurrentPage();
   } catch (error) {
     console.error("[Admin] Refresh users:", error);
-    notify(safeError(error), "error");
+    notify(`Unable to refresh users: ${safeError(error)}`, "error");
   }
 }
 
@@ -1281,7 +1206,6 @@ async function editUserRole(uid) {
   }
 
   const currentRole = roleOf(profile);
-
   const choice = window.prompt(
     `Change role for ${displayName(profile, uid)}.\n\nEnter student, teacher, or admin.\nCurrent role: ${currentRole}`,
     currentRole
@@ -1297,8 +1221,7 @@ async function editUserRole(uid) {
   }
 
   const existingAdmins = Object.entries(usersCache).filter(([, user]) =>
-    ["admin", "administrator"].includes(roleOf(user)) &&
-    !isSuspended(user)
+    ["admin", "administrator"].includes(roleOf(user)) && !isSuspended(user)
   ).length;
 
   if (
@@ -1310,9 +1233,7 @@ async function editUserRole(uid) {
     return;
   }
 
-  if (!window.confirm(
-    `Change ${displayName(profile, uid)} from ${currentRole} to ${nextRole}?`
-  )) {
+  if (!window.confirm(`Change ${displayName(profile, uid)} from ${currentRole} to ${nextRole}?`)) {
     return;
   }
 
@@ -1334,7 +1255,7 @@ async function editUserRole(uid) {
     await refreshUsers();
   } catch (error) {
     console.error("[Admin] Change role:", error);
-    notify(safeError(error), "error");
+    notify(`Unable to change role: ${safeError(error)}`, "error");
   }
 }
 
@@ -1355,13 +1276,9 @@ async function toggleUserStatus(uid) {
 
   const suspended = isSuspended(profile);
 
-  if (
-    !suspended &&
-    ["admin", "administrator"].includes(roleOf(profile))
-  ) {
+  if (!suspended && ["admin", "administrator"].includes(roleOf(profile))) {
     const activeAdmins = Object.entries(usersCache).filter(([, user]) =>
-      ["admin", "administrator"].includes(roleOf(user)) &&
-      !isSuspended(user)
+      ["admin", "administrator"].includes(roleOf(user)) && !isSuspended(user)
     ).length;
 
     if (activeAdmins <= 1) {
@@ -1372,9 +1289,7 @@ async function toggleUserStatus(uid) {
 
   const action = suspended ? "reactivate" : "suspend";
 
-  if (!window.confirm(
-    `Are you sure you want to ${action} ${displayName(profile, uid)}?`
-  )) {
+  if (!window.confirm(`Are you sure you want to ${action} ${displayName(profile, uid)}?`)) {
     return;
   }
 
@@ -1389,24 +1304,17 @@ async function toggleUserStatus(uid) {
       statusUpdatedBy: currentUID()
     });
 
-    await writeAudit(
-      suspended ? "USER_REACTIVATED" : "USER_SUSPENDED",
-      {
-        targetUID: uid,
-        targetName: displayName(profile, uid),
-        status: nextStatus
-      }
-    );
+    await writeAudit(suspended ? "USER_REACTIVATED" : "USER_SUSPENDED", {
+      targetUID: uid,
+      targetName: displayName(profile, uid),
+      status: nextStatus
+    });
 
-    notify(
-      suspended ? "Account reactivated." : "Account suspended.",
-      "success"
-    );
-
+    notify(suspended ? "Account reactivated." : "Account suspended.", "success");
     await refreshUsers();
   } catch (error) {
     console.error("[Admin] Update account status:", error);
-    notify(safeError(error), "error");
+    notify(`Unable to update account: ${safeError(error)}`, "error");
   }
 }
 
@@ -1439,10 +1347,7 @@ function renderModeration() {
       message?.moderationStatus === "hidden";
 
     const messageText = String(
-      message?.text ||
-      message?.message ||
-      message?.content ||
-      ""
+      message?.text || message?.message || message?.content || ""
     );
 
     const authorName =
@@ -1462,93 +1367,44 @@ function renderModeration() {
       `<div style="font-weight:700;color:#111827;">${escape(authorName)}</div>
        <div style="margin-top:4px;color:#94A3B8;font-size:10px;">${escape(authorUID)}</div>`,
       `<div style="max-width:330px;white-space:normal;overflow-wrap:anywhere;">
-         ${escape(messageText.slice(0, 300))}
-         ${messageText.length > 300 ? "…" : ""}
+        ${escape(messageText.slice(0, 300))}${messageText.length > 300 ? "…" : ""}
        </div>`,
       statusBadge(flagged ? "flagged" : hidden ? "hidden" : "active"),
       escape(dateText(message.createdAt || message.timestamp)),
       `<div style="display:flex;gap:7px;flex-wrap:wrap;">
-        ${button(
-          flagged ? "Clear flag" : "Flag",
-          "toggle-flag",
-          { variant: flagged ? "success" : "secondary" }
-        ).replace(
-          'data-admin-action="toggle-flag"',
-          `data-admin-action="toggle-flag" data-message-id="${escape(id)}"`
-        )}
+        ${button(flagged ? "Clear flag" : "Flag", "toggle-flag", {
+          variant: flagged ? "success" : "secondary"
+        }).replace('data-admin-action="toggle-flag"', `data-admin-action="toggle-flag" data-message-id="${escape(id)}"`)}
 
-        ${button(
-          hidden ? "Restore" : "Hide",
-          "toggle-message",
-          { variant: hidden ? "success" : "danger" }
-        ).replace(
-          'data-admin-action="toggle-message"',
-          `data-admin-action="toggle-message" data-message-id="${escape(id)}"`
-        )}
+        ${button(hidden ? "Restore" : "Hide", "toggle-message", {
+          variant: hidden ? "success" : "danger"
+        }).replace('data-admin-action="toggle-message"', `data-admin-action="toggle-message" data-message-id="${escape(id)}"`)}
       </div>`
     ]);
   });
 
   return `
-    ${sectionHeading(
-      "Chat Moderation",
-      "Review class chat messages and take moderation actions."
-    )}
+    ${sectionHeading("Chat Moderation", "Review class chat messages and take moderation actions.")}
 
-    <div class="admin-grid" style="
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
-      gap:14px;
-      margin-bottom:20px;
-    ">
+    <div class="admin-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px;">
       ${statCard("Loaded messages", messages.length, "Messages available for review", "#4F46E5")}
       ${statCard("Flagged messages", flaggedMessages.length, "Reported or flagged", "#DC2626")}
-      ${statCard(
-        "Hidden messages",
-        messages.filter(([, message]) =>
-          message?.deleted === true ||
-          message?.hidden === true ||
-          message?.moderationStatus === "hidden"
-        ).length,
-        "Messages hidden from normal display",
-        "#D97706"
-      )}
+      ${statCard("Hidden messages", messages.filter(([, message]) => message?.deleted === true || message?.hidden === true || message?.moderationStatus === "hidden").length, "Messages hidden from normal display", "#D97706")}
     </div>
 
     ${card(`
-      <div style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        gap:12px;
-        flex-wrap:wrap;
-        margin-bottom:18px;
-      ">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
           <h3 style="margin:0 0 5px;font-size:16px;">Message review</h3>
-          <p style="margin:0;color:#64748B;font-size:12px;">
-            Only messages available under the configured database path are shown.
-          </p>
+          <p style="margin:0;color:#64748B;font-size:12px;">Messages from ${escape(ADMIN_CONFIG.CHAT_PATH)}.</p>
         </div>
-
-        ${button("Refresh messages", "refresh-chat", { variant: "secondary" })}
+        ${button("Refresh messages", "refresh-chat")}
       </div>
 
-      ${tableWrapper(
-        ["Author", "Message", "Status", "Sent", "Actions"],
-        rows,
-        "No class chat messages were found."
-      )}
+      ${tableWrapper(["Author", "Message", "Status", "Sent", "Actions"], rows, "No class chat messages were found.")}
 
-      <p style="
-        margin:16px 0 0;
-        color:#94A3B8;
-        font-size:11px;
-        line-height:1.6;
-      ">
-        Moderation changes depend on your actual chat schema and Firebase
-        Security Rules. Hiding a message changes its database status; it
-        does not physically erase the message.
+      <p style="margin:16px 0 0;color:#94A3B8;font-size:11px;line-height:1.6;">
+        Moderation changes depend on your database schema and Firebase Security Rules.
       </p>
     `)}
   `;
@@ -1556,12 +1412,14 @@ function renderModeration() {
 
 async function refreshChat() {
   try {
-    chatCache = await readPath(ADMIN_CONFIG.CHAT_PATH);
-    chatCache = chatCache || {};
+    chatCache = normalizeRecords(await readPath(ADMIN_CONFIG.CHAT_PATH, {
+      limit: ADMIN_CONFIG.CHAT_LIMIT
+    }));
+
     renderCurrentPage();
   } catch (error) {
     console.error("[Admin] Refresh chat:", error);
-    notify(safeError(error), "error");
+    notify(`Unable to refresh chat: ${safeError(error)}`, "error");
   }
 }
 
@@ -1594,7 +1452,7 @@ async function toggleMessageFlag(id) {
     notify(flagged ? "Message flagged." : "Flag cleared.", "success");
   } catch (error) {
     console.error("[Admin] Toggle flag:", error);
-    notify(safeError(error), "error");
+    notify(`Unable to update flag: ${safeError(error)}`, "error");
   }
 }
 
@@ -1611,9 +1469,7 @@ async function toggleMessageVisibility(id) {
     message.hidden === true ||
     message.moderationStatus === "hidden";
 
-  const action = hidden ? "restore" : "hide";
-
-  if (!window.confirm(`Are you sure you want to ${action} this message?`)) {
+  if (!window.confirm(`Are you sure you want to ${hidden ? "restore" : "hide"} this message?`)) {
     return;
   }
 
@@ -1626,15 +1482,14 @@ async function toggleMessageVisibility(id) {
       moderatedBy: currentUID()
     });
 
-    await writeAudit(
-      hidden ? "CHAT_MESSAGE_RESTORED" : "CHAT_MESSAGE_HIDDEN",
-      { messageId: id }
-    );
+    await writeAudit(hidden ? "CHAT_MESSAGE_RESTORED" : "CHAT_MESSAGE_HIDDEN", {
+      messageId: id
+    });
 
     notify(hidden ? "Message restored." : "Message hidden.", "success");
   } catch (error) {
     console.error("[Admin] Toggle visibility:", error);
-    notify(safeError(error), "error");
+    notify(`Unable to moderate message: ${safeError(error)}`, "error");
   }
 }
 
@@ -1655,52 +1510,34 @@ function renderAuditLog() {
        <div style="margin-top:4px;color:#94A3B8;font-size:10px;">${escape(id)}</div>`,
       escape(entry.performedByName || "Unknown"),
       escape(entry.performedBy || "Unknown"),
-      `<div style="max-width:320px;overflow-wrap:anywhere;">
-        ${escape(JSON.stringify(entry.details || {}))}
-       </div>`,
+      `<div style="max-width:320px;overflow-wrap:anywhere;">${escape(JSON.stringify(entry.details || {}))}</div>`,
       escape(dateText(entry.createdAt || entry.serverCreatedAt))
     ])
   );
 
   return `
-    ${sectionHeading(
-      "Audit Log",
-      "A reviewable history of administrative actions recorded by the application.",
-      button("Refresh log", "refresh-audit", { variant: "secondary" })
-    )}
+    ${sectionHeading("Audit Log", "A reviewable history of administrative actions recorded by the application.", button("Refresh log", "refresh-audit"))}
 
     ${card(`
-      <div style="
-        margin-bottom:16px;
-        padding:13px;
-        background:#F8FAFC;
-        border-radius:11px;
-        color:#64748B;
-        font-size:11px;
-        line-height:1.6;
-      ">
-        Audit events are application-level records. For a trustworthy
-        security trail, protect this database path with Firebase Rules and
-        consider server-side logging for privileged operations.
+      <div style="margin-bottom:16px;padding:13px;background:#F8FAFC;border-radius:11px;color:#64748B;font-size:11px;line-height:1.6;">
+        Protect this path with Firebase Rules. Client-side logs alone are not a tamper-proof security record.
       </div>
 
-      ${tableWrapper(
-        ["Action", "Administrator", "UID", "Details", "Time"],
-        rows,
-        "No audit events have been recorded yet."
-      )}
+      ${tableWrapper(["Action", "Administrator", "UID", "Details", "Time"], rows, "No audit events have been recorded yet.")}
     `)}
   `;
 }
 
 async function refreshAudit() {
   try {
-    auditCache = await readPath(ADMIN_CONFIG.AUDIT_PATH);
-    auditCache = auditCache || {};
+    auditCache = normalizeRecords(await readPath(ADMIN_CONFIG.AUDIT_PATH, {
+      limit: ADMIN_CONFIG.LOG_LIMIT
+    }));
+
     renderCurrentPage();
   } catch (error) {
-    console.error("[Admin] Refresh audit log:", error);
-    notify(safeError(error), "error");
+    console.error("[Admin] Refresh audit:", error);
+    notify(`Unable to refresh audit log: ${safeError(error)}`, "error");
   }
 }
 
@@ -1709,171 +1546,81 @@ async function refreshAudit() {
    ============================================================ */
 
 function renderSystemStatus() {
-  const connectionStatus = navigator.onLine
-    ? "Online"
-    : "Offline";
+  const online = navigator.onLine;
+  const connectionStatus = online ? "Online" : "Offline";
+  const connectionColor = online ? "#16A34A" : "#DC2626";
+  const authStatus = auth?.currentUser ? "Authenticated" : "Not authenticated";
+  const databaseStatus = database ? "Initialized" : "Unavailable";
+  const profileStatus = currentProfile ? "Loaded" : "Missing";
 
-  const connectionColor = navigator.onLine
-    ? "#16A34A"
-    : "#DC2626";
-
-  const authStatus = auth?.currentUser
-    ? "Authenticated"
-    : "Not authenticated";
-
-  const databaseStatus = database
-    ? "Initialized"
-    : "Unavailable";
-
-  const profileStatus = currentProfile
-    ? "Loaded"
-    : "Missing";
+  const info = [
+    ["Application", "Math Class — Virtual Learning Portal"],
+    ["Firebase SDK", "10.5.0"],
+    ["Authentication UID", currentUID() || "Not available"],
+    ["Profile role", roleOf(currentProfile)],
+    ["Database instance", database ? "Available" : "Not available"],
+    ["Browser language", navigator.language || "Unknown"],
+    ["Browser connectivity", connectionStatus],
+    ["Last status check", new Date().toLocaleString()]
+  ];
 
   return `
-    ${sectionHeading(
-      "System Status",
-      "Check client-side connectivity and the state of initialized services."
-    )}
+    ${sectionHeading("System Status", "Check client-side connectivity and initialized services.")}
 
-    <div class="admin-grid" style="
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-      gap:14px;
-    ">
+    <div class="admin-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
       ${card(`
         <div style="color:#64748B;font-size:11px;font-weight:700;">NETWORK</div>
-
-        <div style="
-          margin:12px 0;
-          display:flex;
-          align-items:center;
-          gap:9px;
-          color:${connectionColor};
-          font-size:21px;
-          font-weight:800;
-        ">
-          <span style="
-            width:10px;
-            height:10px;
-            background:${connectionColor};
-            border-radius:50%;
-          "></span>
-          ${connectionStatus}
+        <div style="margin:12px 0;display:flex;align-items:center;gap:9px;color:${connectionColor};font-size:21px;font-weight:800;">
+          <span style="width:10px;height:10px;background:${connectionColor};border-radius:50%;"></span>${connectionStatus}
         </div>
-
-        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">
-          Browser connectivity indicator. Online status does not guarantee
-          that Firebase is reachable.
-        </p>
+        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">Online status does not guarantee Firebase is reachable.</p>
       `)}
 
       ${card(`
         <div style="color:#64748B;font-size:11px;font-weight:700;">FIREBASE AUTH</div>
-
-        <div style="margin:12px 0;color:#111827;font-size:21px;font-weight:800;">
-          ${escape(authStatus)}
-        </div>
-
-        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">
-          Current authentication state.
-        </p>
+        <div style="margin:12px 0;color:#111827;font-size:21px;font-weight:800;">${escape(authStatus)}</div>
+        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">Current authentication state.</p>
       `)}
 
       ${card(`
         <div style="color:#64748B;font-size:11px;font-weight:700;">REALTIME DATABASE</div>
-
-        <div style="margin:12px 0;color:#111827;font-size:21px;font-weight:800;">
-          ${escape(databaseStatus)}
-        </div>
-
-        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">
-          SDK initialization state. Read/write access must be tested separately.
-        </p>
+        <div style="margin:12px 0;color:#111827;font-size:21px;font-weight:800;">${escape(databaseStatus)}</div>
+        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">SDK initialization state. Access must be tested separately.</p>
       `)}
 
       ${card(`
         <div style="color:#64748B;font-size:11px;font-weight:700;">ADMIN PROFILE</div>
-
-        <div style="margin:12px 0;color:#111827;font-size:21px;font-weight:800;">
-          ${escape(profileStatus)}
-        </div>
-
-        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">
-          User profile loaded by the main application.
-        </p>
+        <div style="margin:12px 0;color:#111827;font-size:21px;font-weight:800;">${escape(profileStatus)}</div>
+        <p style="margin:0;color:#64748B;font-size:12px;line-height:1.6;">Profile loaded by the main application.</p>
       `)}
     </div>
 
     <div style="margin-top:18px;">
       ${card(`
         <h3 style="margin:0 0 16px;font-size:16px;">Runtime information</h3>
-
-        ${[
-          ["Application", "Math Class — Virtual Learning Portal"],
-          ["Firebase SDK", "10.5.0"],
-          ["Authentication UID", currentUID() || "Not available"],
-          ["Profile role", roleOf(currentProfile)],
-          ["Database instance", database ? "Available in application context" : "Not available"],
-          ["Browser language", navigator.language || "Unknown"],
-          ["Browser connectivity", connectionStatus],
-          ["Last status check", new Date().toLocaleString()]
-        ].map(([label, value]) => `
-          <div style="
-            display:flex;
-            justify-content:space-between;
-            align-items:flex-start;
-            gap:16px;
-            padding:12px 0;
-            border-bottom:1px solid #F1F5F9;
-          ">
+        ${info.map(([label, value]) => `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:12px 0;border-bottom:1px solid #F1F5F9;">
             <span style="color:#64748B;font-size:12px;">${escape(label)}</span>
-            <span style="
-              color:#334155;
-              font-size:12px;
-              font-weight:600;
-              text-align:right;
-              overflow-wrap:anywhere;
-            ">${escape(value)}</span>
+            <span style="color:#334155;font-size:12px;font-weight:600;text-align:right;overflow-wrap:anywhere;">${escape(value)}</span>
           </div>
         `).join("")}
-
-        <div style="margin-top:18px;">
-          ${button("Refresh status", "refresh-system", { variant: "primary" })}
-        </div>
+        <div style="margin-top:18px;">${button("Refresh status", "refresh-system", { variant: "primary" })}</div>
       `)}
     </div>
 
     <div style="margin-top:18px;">
       ${card(`
         <h3 style="margin:0 0 8px;font-size:16px;">Security checklist</h3>
-
-        <p style="
-          margin:0 0 14px;
-          color:#64748B;
-          font-size:12px;
-          line-height:1.6;
-        ">
-          These are manual verification items, not automated security tests.
-        </p>
-
+        <p style="margin:0 0 14px;color:#64748B;font-size:12px;line-height:1.6;">These are manual verification items, not automated security tests.</p>
         ${[
-          "Confirm Firebase Realtime Database Rules deny unauthenticated access.",
-          "Confirm only authorized administrators can change account roles.",
-          "Confirm students cannot read other students' private doubts.",
-          "Confirm Storage Rules restrict file access and upload sizes.",
-          "Confirm class chat and audit records cannot be modified by ordinary users."
+          "Deny unauthenticated database access.",
+          "Restrict role changes to authorized administrators.",
+          "Prevent students from reading other students' private doubts.",
+          "Restrict file access and upload sizes in Storage Rules.",
+          "Prevent ordinary users from modifying chat moderation and audit records."
         ].map(item => `
-          <div style="
-            display:flex;
-            align-items:flex-start;
-            gap:10px;
-            padding:10px 0;
-            color:#475569;
-            font-size:12px;
-            line-height:1.6;
-          ">
-            <span style="color:#D97706;font-weight:800;">○</span>
-            <span>${escape(item)}</span>
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;color:#475569;font-size:12px;line-height:1.6;">
+            <span style="color:#D97706;font-weight:800;">○</span><span>${escape(item)}</span>
           </div>
         `).join("")}
       `)}
@@ -1888,18 +1635,16 @@ function renderSystemStatus() {
 async function handleAction(event) {
   const target = event.target.closest("[data-admin-action]");
 
-  if (!target) return;
+  if (!target || target.disabled || disposed) return;
 
   const action = target.dataset.adminAction;
 
   try {
     switch (action) {
-      case "navigate": {
-        const page = target.dataset.page || "dashboard";
+      case "navigate":
         searchTerm = "";
-        navigate(page);
+        navigate(target.dataset.page || "dashboard");
         break;
-      }
 
       case "role-tab":
         activeTab = target.dataset.tab || "all";
@@ -1953,7 +1698,7 @@ async function handleAction(event) {
 }
 
 function handleSearchInput(event) {
-  if (event.target.id !== "admin-user-search") return;
+  if (event.target.id !== "admin-user-search" || disposed) return;
 
   const selectionStart = event.target.selectionStart;
   const selectionEnd = event.target.selectionEnd;
@@ -1962,11 +1707,9 @@ function handleSearchInput(event) {
 
   const section = document.getElementById("admin-section-content");
 
-  if (!section) return;
+  if (!section || currentPage !== "roles") return;
 
-  const newContent = renderRoleManager();
-
-  section.innerHTML = newContent;
+  section.innerHTML = renderRoleManager();
 
   const nextInput = document.getElementById("admin-user-search");
 
@@ -1976,7 +1719,7 @@ function handleSearchInput(event) {
     try {
       nextInput.setSelectionRange(selectionStart, selectionEnd);
     } catch {
-      // Some mobile browsers do not support selection ranges for search inputs.
+      // Mobile browsers may not support selection ranges for search inputs.
     }
   }
 }
@@ -1986,6 +1729,8 @@ function handleSearchInput(event) {
    ============================================================ */
 
 async function loadAdminData() {
+  if (loading || disposed) return;
+
   const access = verifyAdmin();
 
   if (!access.allowed) {
@@ -1993,6 +1738,7 @@ async function loadAdminData() {
     return;
   }
 
+  loading = true;
   detachListeners();
 
   usersCache = {};
@@ -2003,55 +1749,84 @@ async function loadAdminData() {
 
   setPageContent(adminShell(loadingState("Loading admin data…")));
 
-  const initialLoads = [
-    {
-      path: ADMIN_CONFIG.USERS_PATH,
-      assign: value => {
-        usersCache = value || {};
-      }
-    },
-    {
-      path: ADMIN_CONFIG.CHAT_PATH,
-      assign: value => {
-        chatCache = value || {};
-      },
-      limit: ADMIN_CONFIG.CHAT_LIMIT
-    },
-    {
-      path: ADMIN_CONFIG.AUDIT_PATH,
-      assign: value => {
-        auditCache = value || {};
-      },
-      limit: ADMIN_CONFIG.LOG_LIMIT
-    }
-  ];
-
   try {
-    await Promise.all(initialLoads.map(async item => {
-      const value = await readPath(item.path);
-      item.assign(value);
-    }));
+    const [users, chat, audit] = await Promise.all([
+      readPath(ADMIN_CONFIG.USERS_PATH),
+      readPath(ADMIN_CONFIG.CHAT_PATH, { limit: ADMIN_CONFIG.CHAT_LIMIT }),
+      readPath(ADMIN_CONFIG.AUDIT_PATH, { limit: ADMIN_CONFIG.LOG_LIMIT })
+    ]);
+
+    if (disposed) return;
+
+    usersCache = normalizeRecords(users);
+    chatCache = normalizeRecords(chat);
+    auditCache = normalizeRecords(audit);
 
     renderCurrentPage();
 
-    initialLoads.forEach(item => {
-      listen(item.path, (value, error) => {
-        if (error) {
-          console.error(`[Admin] Listener error (${item.path}):`, error);
-          notify(safeError(error), "error");
-          return;
-        }
+    listen(ADMIN_CONFIG.USERS_PATH, (value, error) => {
+      if (disposed) return;
 
-        item.assign(value);
-        renderCurrentPage();
-      }, item.limit ? { limit: item.limit } : {});
+      if (error) {
+        console.error("[Admin] Users listener:", error);
+        notify(`Users update failed: ${safeError(error)}`, "error");
+        return;
+      }
+
+      usersCache = normalizeRecords(value);
+      renderCurrentPage();
     });
+
+    listen(ADMIN_CONFIG.CHAT_PATH, (value, error) => {
+      if (disposed) return;
+
+      if (error) {
+        console.error("[Admin] Chat listener:", error);
+        notify(`Chat update failed: ${safeError(error)}`, "error");
+        return;
+      }
+
+      chatCache = normalizeRecords(value);
+      renderCurrentPage();
+    }, { limit: ADMIN_CONFIG.CHAT_LIMIT });
+
+    listen(ADMIN_CONFIG.AUDIT_PATH, (value, error) => {
+      if (disposed) return;
+
+      if (error) {
+        console.error("[Admin] Audit listener:", error);
+        notify(`Audit update failed: ${safeError(error)}`, "error");
+        return;
+      }
+
+      auditCache = normalizeRecords(value);
+      renderCurrentPage();
+    }, { limit: ADMIN_CONFIG.LOG_LIMIT });
+
   } catch (error) {
     console.error("[Admin] Initial data load failed:", error);
 
-    setPageContent(adminShell(
-      errorState(safeError(error), "retry")
-    ));
+    if (!disposed) {
+      setPageContent(adminShell(
+        errorState(safeError(error), "retry")
+      ));
+    }
+  } finally {
+    loading = false;
+  }
+}
+
+/* ============================================================
+   CONNECTIVITY
+   ============================================================ */
+
+function handleConnectivityChange() {
+  if (!initialized || disposed) return;
+
+  if (!navigator.onLine) {
+    notify("Your device is offline. Live updates may be delayed.", "error");
+  } else {
+    notify("Connection restored.", "success");
   }
 }
 
@@ -2060,12 +1835,9 @@ async function loadAdminData() {
    ============================================================ */
 
 export async function init(context = {}) {
-  if (initialized) {
-    cleanup();
-  }
+  cleanup();
 
   ctx = context;
-
   auth = context.auth || null;
   database = context.db || context.database || null;
   currentUser = context.user || auth?.currentUser || null;
@@ -2073,31 +1845,18 @@ export async function init(context = {}) {
 
   disposed = false;
   initialized = true;
+  loading = false;
 
   addSpinnerStyle();
 
   pageContainer = document.querySelector(
-    "#page-content, #app-content, #main-content, [data-page-content], main"
+    "#page-content, #app-content, #main-content, #pageContent, #appView, [data-page-content], main"
   );
-
-  if (!pageContainer) {
-    console.error(
-      "[Admin] No content container found. Ensure index.html contains a main page-content element."
-    );
-  }
 
   if (!database) {
     setPageContent(`
-      <div style="
-        max-width:650px;
-        margin:40px auto;
-        padding:25px;
-        background:#FFFFFF;
-        border:1px solid #FECACA;
-        border-radius:16px;
-      ">
+      <div style="max-width:650px;margin:40px auto;padding:25px;background:#FFFFFF;border:1px solid #FECACA;border-radius:16px;">
         <h2 style="margin-top:0;color:#991B1B;">Database unavailable</h2>
-
         <p style="color:#64748B;font-size:13px;line-height:1.7;">
           The Admin Panel requires a Firebase Realtime Database instance.
           Check that the main application passes its initialized database
@@ -2117,38 +1876,26 @@ export async function init(context = {}) {
       detail.page || detail.route || detail.name || ""
     );
 
-    if (
-      ["dashboard", "roles", "moderation", "audit", "system"].includes(page)
-    ) {
+    if (ALLOWED_ADMIN_PAGES.includes(page)) {
       currentPage = page;
       renderCurrentPage();
     }
   };
 
   window.addEventListener("mathclass:pagechange", pageChangeHandler);
-
   document.addEventListener("click", handleAction);
   document.addEventListener("input", handleSearchInput);
-
   window.addEventListener("online", handleConnectivityChange);
   window.addEventListener("offline", handleConnectivityChange);
 
-  if (!verifyAdmin().allowed) {
-    renderAccessDenied(verifyAdmin().message);
+  const access = verifyAdmin();
+
+  if (!access.allowed) {
+    renderAccessDenied(access.message);
     return;
   }
 
   await loadAdminData();
-}
-
-function handleConnectivityChange() {
-  if (!initialized || disposed) return;
-
-  if (!navigator.onLine) {
-    notify("Your device is offline. Live updates may be delayed.", "error");
-  } else {
-    notify("Connection restored.", "success");
-  }
 }
 
 export function render(page = "dashboard") {
@@ -2162,7 +1909,6 @@ export function refresh() {
 
 export function cleanup() {
   disposed = true;
-
   detachListeners();
 
   if (pageChangeHandler) {
@@ -2172,12 +1918,11 @@ export function cleanup() {
 
   document.removeEventListener("click", handleAction);
   document.removeEventListener("input", handleSearchInput);
-
   window.removeEventListener("online", handleConnectivityChange);
   window.removeEventListener("offline", handleConnectivityChange);
 
   initialized = false;
-  busy = false;
+  loading = false;
 }
 
 export default {
