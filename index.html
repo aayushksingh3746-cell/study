@@ -1,122 +1,1033 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Math Tracker</title>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f4f5; padding: 20px; }
-        .container { max-width: 400px; margin: 0 auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #18181b; margin-top: 0; }
-        label { display: block; margin-top: 16px; font-weight: 500; font-size: 14px; color: #3f3f46; }
-        input { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #d4d4d8; border-radius: 6px; box-sizing: border-box; }
-        button { width: 100%; background: #2563eb; color: white; padding: 12px; margin-top: 24px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        button:disabled { background: #93c5fd; cursor: not-allowed; }
-        #status { margin-top: 16px; text-align: center; font-size: 14px; font-weight: 500; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>MathClass | Learning Portal</title>
 
-    <!-- Supabase Library -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Image Compression Library -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+
+<style>
+  body {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    background: #f5f7fb;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e7eaf0;
+    border-radius: 20px;
+    box-shadow: 0 8px 30px rgba(15,23,42,.045);
+  }
+
+  .field {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #dbe1ea;
+    border-radius: 12px;
+    background: white;
+    outline: none;
+    transition: .2s;
+  }
+
+  .field:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 17px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: .2s;
+  }
+
+  .btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+
+  .primary {
+    background: #4f46e5;
+    color: white;
+  }
+
+  .primary:hover {
+    background: #4338ca;
+  }
+
+  .urgent-card {
+    background: #fff5f5;
+    border-left: 4px solid #ef4444;
+  }
+
+  .announcement-card {
+    background: #f8fafc;
+    border-left: 4px solid #6366f1;
+  }
+
+  .hidden-view {
+    display: none !important;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid #edf0f5;
+    white-space: nowrap;
+  }
+
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #64748b;
+    background: #f8fafc;
+  }
+
+  .spinner {
+    width: 17px;
+    height: 17px;
+    border: 2px solid #ffffff66;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
 </head>
-<body>
 
-<div class="container">
-    <h2>Daily Math Log</h2>
-    <form id="studyForm">
-        <label>Roll Number</label>
-        <input type="number" id="rollNumber" required placeholder="e.g., 14">
+<body class="min-h-screen text-slate-800">
 
-        <label>Questions Solved Today</label>
-        <input type="number" id="questions" required placeholder="Target: 10">
+<header class="bg-slate-950 text-white">
+  <div class="max-w-7xl mx-auto px-5 py-4 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 bg-indigo-500 rounded-xl flex items-center justify-center text-2xl font-black">∑</div>
+      <div>
+        <h1 class="font-extrabold text-lg">MathClass</h1>
+        <p class="text-xs text-slate-400">Your learning space</p>
+      </div>
+    </div>
 
-        <label>Time Spent (Minutes)</label>
-        <input type="number" id="time" required placeholder="e.g., 45">
+    <div id="session-area" class="hidden-view items-center gap-3">
+      <span id="role-label" class="text-sm text-slate-300"></span>
+      <button id="logout-button" class="btn bg-white/10 hover:bg-white/20 text-white">
+        Sign out
+      </button>
+    </div>
+  </div>
+</header>
 
-        <label>Proof of Practice</label>
-        <!-- The "capture" attribute opens the camera directly on mobile phones -->
-        <input type="file" id="proofImage" accept="image/*" capture="environment" required>
+<!-- AUTHENTICATION -->
+<main id="auth-view" class="max-w-md mx-auto px-5 py-12">
+  <section class="card p-7 sm:p-9">
+    <p class="text-indigo-600 font-extrabold text-xs tracking-widest uppercase">Learning Portal</p>
 
-        <button type="submit" id="submitBtn">Submit Log</button>
+    <h2 id="auth-heading" class="text-3xl font-extrabold mt-3">Welcome back.</h2>
+    <p id="auth-description" class="text-slate-500 text-sm mt-2">
+      Sign in to access your classroom.
+    </p>
+
+    <form id="auth-form" class="mt-7 space-y-5">
+      <div>
+        <label for="auth-email" class="block text-sm font-semibold mb-2">Email address</label>
+        <input id="auth-email" type="email" class="field"
+               autocomplete="email" required placeholder="you@example.com">
+      </div>
+
+      <div>
+        <label for="auth-password" class="block text-sm font-semibold mb-2">Password</label>
+        <input id="auth-password" type="password" class="field"
+               autocomplete="current-password" minlength="6" required
+               placeholder="At least 6 characters">
+      </div>
+
+      <div id="confirm-wrap" class="hidden-view">
+        <label for="auth-confirm" class="block text-sm font-semibold mb-2">Confirm password</label>
+        <input id="auth-confirm" type="password" class="field"
+               autocomplete="new-password" minlength="6">
+      </div>
+
+      <button id="auth-submit" class="btn primary w-full py-3" type="submit">
+        Sign in
+      </button>
     </form>
-    <div id="status"></div>
+
+    <p class="text-center text-sm text-slate-500 mt-6">
+      <span id="auth-toggle-label">New student?</span>
+      <button id="auth-toggle" class="text-indigo-600 font-bold ml-1 hover:underline">
+        Create account
+      </button>
+    </p>
+  </section>
+</main>
+
+<!-- APPLICATION -->
+<main id="app-view" class="hidden-view max-w-7xl mx-auto px-5 py-9">
+
+  <section class="mb-8">
+    <p id="dashboard-eyebrow" class="text-xs font-extrabold tracking-widest uppercase text-indigo-600"></p>
+    <h2 id="dashboard-heading" class="text-3xl sm:text-4xl font-extrabold tracking-tight mt-2"></h2>
+    <p id="dashboard-description" class="text-slate-500 mt-2"></p>
+    <p id="today-label" class="text-xs text-slate-400 mt-3"></p>
+  </section>
+
+  <!-- TEACHER DASHBOARD -->
+  <div id="teacher-view" class="hidden-view space-y-7">
+
+    <section class="card p-6 sm:p-8">
+      <h3 class="text-xl font-extrabold">Publish an announcement</h3>
+      <p class="text-sm text-slate-500 mt-1 mb-6">
+        Share homework, important notices, and classroom updates.
+      </p>
+
+      <form id="announcement-form" class="space-y-5">
+        <div>
+          <label for="announcement-message" class="block text-sm font-semibold mb-2">
+            Message
+          </label>
+          <textarea id="announcement-message" class="field" rows="4"
+                    maxlength="3000" required
+                    placeholder="Write your announcement..."></textarea>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-5">
+          <div>
+            <label for="announcement-priority" class="block text-sm font-semibold mb-2">
+              Priority level
+            </label>
+            <select id="announcement-priority" class="field">
+              <option value="normal">Normal</option>
+              <option value="important">Important</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="announcement-file" class="block text-sm font-semibold mb-2">
+              Attachment (optional)
+            </label>
+            <input id="announcement-file" type="file" class="field"
+                   accept="image/*,.pdf">
+            <p class="text-xs text-slate-400 mt-1">Maximum file size: 5 MB</p>
+          </div>
+        </div>
+
+        <button id="announcement-submit" class="btn primary" type="submit">
+          Publish announcement
+        </button>
+      </form>
+    </section>
+
+    <section class="card overflow-hidden">
+      <div class="p-6 sm:p-8 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-xl font-extrabold">Student study logs</h3>
+          <p class="text-sm text-slate-500 mt-1">Review work and verify submissions.</p>
+        </div>
+        <span id="log-count" class="text-sm text-indigo-600 font-bold">0 submissions</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Student email</th>
+              <th>Date</th>
+              <th>Time spent</th>
+              <th>Questions solved</th>
+              <th>Proof image</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="logs-table">
+            <tr><td colspan="7" class="text-center text-slate-400 py-10">Loading study logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- STUDENT HUB -->
+  <div id="student-view" class="hidden-view grid lg:grid-cols-5 gap-7">
+
+    <section class="lg:col-span-2">
+      <div class="card p-6 sm:p-7">
+        <p class="text-xs uppercase tracking-widest font-extrabold text-indigo-600">Daily practice</p>
+        <h3 class="text-2xl font-extrabold mt-2">Daily Math Log</h3>
+        <p class="text-sm text-slate-500 mt-2 mb-6">
+          Record your progress and upload proof of your work.
+        </p>
+
+        <div id="daily-status" class="hidden-view rounded-xl p-4 mb-5 text-sm"></div>
+
+        <form id="daily-log-form" class="space-y-5">
+          <div>
+            <label for="questions-solved" class="block text-sm font-semibold mb-2">
+              Questions solved
+            </label>
+            <input id="questions-solved" class="field" type="number"
+                   min="1" max="10000" step="1" required placeholder="e.g. 25">
+          </div>
+
+          <div>
+            <label for="time-spent" class="block text-sm font-semibold mb-2">
+              Time spent (minutes)
+            </label>
+            <input id="time-spent" class="field" type="number"
+                   min="1" max="1440" step="1" required placeholder="e.g. 45">
+          </div>
+
+          <div>
+            <label for="proof-image" class="block text-sm font-semibold mb-2">
+              Homework proof image
+            </label>
+            <input id="proof-image" class="field" type="file"
+                   accept="image/jpeg,image/png,image/webp" required>
+            <p class="text-xs text-slate-400 mt-2">
+              Your image is compressed before uploading.
+            </p>
+          </div>
+
+          <button id="daily-log-submit" class="btn primary w-full py-3" type="submit">
+            Submit daily log
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <section class="lg:col-span-3">
+      <div class="card p-6 sm:p-8">
+        <div class="flex items-center justify-between gap-3 mb-6">
+          <div>
+            <h3 class="text-xl font-extrabold">Class announcements</h3>
+            <p class="text-sm text-slate-500 mt-1">Updates from your teacher.</p>
+          </div>
+          <span class="text-2xl">📢</span>
+        </div>
+
+        <div id="announcements-feed" class="space-y-4">
+          <p class="text-center text-sm text-slate-400 py-8">Loading announcements...</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="max-w-7xl mx-auto px-5 py-8 text-center text-xs text-slate-400">
+  MathClass Learning Portal
+</footer>
+
+<div id="toast" role="status" aria-live="polite"
+     class="hidden-view fixed bottom-5 left-5 right-5 sm:left-auto sm:right-5 sm:max-w-md p-4 rounded-xl shadow-2xl z-50 text-white">
 </div>
 
-<script>
-    // --- SETUP YOUR SUPABASE CONNECTION HERE ---
-    const SUPABASE_URL = 'https://befgbhdexpifyvfudxax.supabase.co'; 
-    const SUPABASE_ANON_KEY = 'Sb_publishable_2JdmwLqNrxTa4AerZThdJA_hqWExyhc'; // Your provided key
-    
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 
-    document.getElementById('studyForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const btn = document.getElementById('submitBtn');
-        const status = document.getElementById('status');
-        const rollNumber = document.getElementById('rollNumber').value;
-        const questions = document.getElementById('questions').value;
-        const time = document.getElementById('time').value;
-        const imageFile = document.getElementById('proofImage').files[0];
+import {
+  getAuth,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-        btn.disabled = true;
-        btn.innerText = "Compressing Image...";
-        status.style.color = "blue";
-        status.innerText = "Processing...";
+import {
+  getDatabase,
+  ref,
+  push,
+  set,
+  update,
+  onValue,
+  get
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
-        try {
-            // 1. Compress the image before uploading (saves storage)
-            const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true };
-            const compressedFile = await imageCompression(imageFile, options);
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 
-            // 2. Upload to Supabase Storage
-            btn.innerText = "Uploading to Database...";
-            const fileName = `${rollNumber}-${Date.now()}.jpg`;
-            
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('homework-proofs')
-                .upload(fileName, compressedFile);
 
-            if (uploadError) throw uploadError;
+// ========================================================
+// FIREBASE INITIALIZATION — EXACT CONFIGURATION PROVIDED
+// ========================================================
 
-            // Get the public URL of the uploaded image
-            const { data: urlData } = supabase.storage
-                .from('homework-proofs')
-                .getPublicUrl(fileName);
+const firebaseConfig = {
+  apiKey: "AIzaSyDQ3bYoj549-7hFeieHHMAValS757IWsTY",
+  authDomain: "study-c3017.firebaseapp.com",
+  projectId: "study-c3017",
+  storageBucket: "study-c3017.firebasestorage.app",
+  messagingSenderId: "533271518437",
+  appId: "1:533271518437:web:378781c3d8da4574b0480c",
+  measurementId: "G-PYCYLLF5E2"
+};
 
-            // 3. Save the record to your database table
-            btn.innerText = "Saving Record...";
-            const { error: dbError } = await supabase
-                .from('daily_study_logs')
-                .insert([{
-                    student_roll_number: parseInt(rollNumber),
-                    questions_solved: parseInt(questions),
-                    study_time_minutes: parseInt(time),
-                    proof_image_url: urlData.publicUrl
-                }]);
+const TEACHER_UID = "YNdqDJRyZ1hFAtqrJeZJYScldfc2";
 
-            if (dbError) throw dbError;
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const storage = getStorage(app);
 
-            // Success
-            status.style.color = "green";
-            status.innerText = "✅ Successfully submitted! Great job today.";
-            document.getElementById('studyForm').reset();
+const $ = id => document.getElementById(id);
 
-        } catch (error) {
-            console.error(error);
-            status.style.color = "red";
-            if (error.code === '23505') {
-                status.innerText = "❌ You have already submitted a log for today!";
-            } else {
-                status.innerText = "❌ Error: " + error.message;
-            }
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "Submit Log";
-        }
+let authMode = "login";
+let currentUser = null;
+let stopLogsListener = null;
+let stopAnnouncementsListener = null;
+let submittingDailyLog = false;
+let toastTimer;
+
+
+// ========================================================
+// UTILITIES
+// ========================================================
+
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function showToast(message, type = "info") {
+  const toast = $("toast");
+  toast.textContent = message;
+
+  toast.className =
+    "fixed bottom-5 left-5 right-5 sm:left-auto sm:right-5 sm:max-w-md " +
+    "p-4 rounded-xl shadow-2xl z-50 text-white " +
+    (type === "error" ? "bg-red-700" :
+     type === "success" ? "bg-emerald-700" : "bg-slate-950");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.add("hidden-view"), 4500);
+}
+
+function setBusy(button, busy, label = "Please wait...") {
+  if (busy) {
+    if (!button.dataset.originalText) {
+      button.dataset.originalText = button.textContent.trim();
+    }
+
+    button.disabled = true;
+    button.innerHTML = `<span class="spinner"></span><span>${escapeHTML(label)}</span>`;
+  } else {
+    button.disabled = false;
+    button.textContent = button.dataset.originalText || "Submit";
+    delete button.dataset.originalText;
+  }
+}
+
+function explainError(error) {
+  const code = error?.code || "";
+
+  const errors = {
+    "auth/email-already-in-use": "This email is already registered.",
+    "auth/invalid-email": "Enter a valid email address.",
+    "auth/weak-password": "Choose a stronger password.",
+    "auth/invalid-credential": "Incorrect email or password.",
+    "auth/user-not-found": "No account exists for this email.",
+    "auth/wrong-password": "Incorrect email or password.",
+    "auth/too-many-requests": "Too many attempts. Please try again later.",
+    "auth/network-request-failed": "Network error. Check your connection.",
+    "storage/unauthorized": "Storage permission denied. Check Storage Rules.",
+    "database/permission-denied": "Database permission denied. Check Database Rules."
+  };
+
+  if (errors[code]) return errors[code];
+
+  return error?.message || "Something went wrong. Please try again.";
+}
+
+function stopListeners() {
+  if (stopLogsListener) stopLogsListener();
+  if (stopAnnouncementsListener) stopAnnouncementsListener();
+
+  stopLogsListener = null;
+  stopAnnouncementsListener = null;
+}
+
+
+// ========================================================
+// LOGIN / REGISTRATION
+// ========================================================
+
+$("auth-toggle").addEventListener("click", () => {
+  authMode = authMode === "login" ? "register" : "login";
+
+  const registering = authMode === "register";
+
+  $("auth-heading").textContent =
+    registering ? "Create your account." : "Welcome back.";
+
+  $("auth-description").textContent =
+    registering
+      ? "Register using your email and password."
+      : "Sign in to access your classroom.";
+
+  $("auth-submit").textContent =
+    registering ? "Create account" : "Sign in";
+
+  $("auth-toggle-label").textContent =
+    registering ? "Already registered?" : "New student?";
+
+  $("auth-toggle").textContent =
+    registering ? "Sign in" : "Create account";
+
+  $("confirm-wrap").classList.toggle("hidden-view", !registering);
+  $("auth-confirm").required = registering;
+
+  $("auth-password").autocomplete =
+    registering ? "new-password" : "current-password";
+});
+
+$("auth-form").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const button = $("auth-submit");
+  const email = $("auth-email").value.trim();
+  const password = $("auth-password").value;
+
+  if (authMode === "register" &&
+      password !== $("auth-confirm").value) {
+    showToast("The passwords do not match.", "error");
+    return;
+  }
+
+  setBusy(button, true, authMode === "register" ? "Creating account..." : "Signing in...");
+
+  try {
+    if (authMode === "register") {
+      await createUserWithEmailAndPassword(auth, email, password);
+      showToast("Account created successfully.", "success");
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      showToast("Signed in successfully.", "success");
+    }
+  } catch (error) {
+    showToast(explainError(error), "error");
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$("logout-button").addEventListener("click", async () => {
+  stopListeners();
+
+  try {
+    await signOut(auth);
+    showToast("Signed out successfully.", "success");
+  } catch (error) {
+    showToast(explainError(error), "error");
+  }
+});
+
+
+// ========================================================
+// AUTH STATE AND ROLE ROUTING
+// ========================================================
+
+onAuthStateChanged(auth, user => {
+  stopListeners();
+  currentUser = user;
+
+  $("auth-view").classList.toggle("hidden-view", !!user);
+  $("app-view").classList.toggle("hidden-view", !user);
+  $("session-area").classList.toggle("hidden-view", !user);
+
+  if (!user) {
+    $("teacher-view").classList.add("hidden-view");
+    $("student-view").classList.add("hidden-view");
+    return;
+  }
+
+  const isTeacher = user.uid === TEACHER_UID;
+
+  $("role-label").textContent = isTeacher ? "Teacher" : "Student";
+
+  $("dashboard-eyebrow").textContent =
+    isTeacher ? "TEACHER DASHBOARD" : "STUDENT HUB";
+
+  $("dashboard-heading").textContent =
+    isTeacher ? "Class overview." : "Your learning space.";
+
+  $("dashboard-description").textContent =
+    isTeacher
+      ? "Publish announcements and verify student study logs."
+      : "Read class updates and submit your daily math practice.";
+
+  $("today-label").textContent = new Date().toLocaleDateString(
+    undefined,
+    { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+  );
+
+  $("teacher-view").classList.toggle("hidden-view", !isTeacher);
+  $("student-view").classList.toggle("hidden-view", isTeacher);
+
+  if (isTeacher) {
+    listenToStudyLogs();
+  } else {
+    listenToAnnouncements();
+    checkDailySubmission(user);
+  }
+});
+
+
+// ========================================================
+// TEACHER: PUBLISH ANNOUNCEMENTS
+// ========================================================
+
+$("announcement-form").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  if (!currentUser || currentUser.uid !== TEACHER_UID) {
+    showToast("Teacher access is required.", "error");
+    return;
+  }
+
+  const button = $("announcement-submit");
+  const message = $("announcement-message").value.trim();
+  const priority = $("announcement-priority").value;
+  const file = $("announcement-file").files[0];
+
+  if (!message) {
+    showToast("Enter an announcement message.", "error");
+    return;
+  }
+
+  if (!["normal", "important", "urgent"].includes(priority)) {
+    showToast("Choose a valid priority.", "error");
+    return;
+  }
+
+  if (file && file.size > 5 * 1024 * 1024) {
+    showToast("The attachment must be 5 MB or smaller.", "error");
+    return;
+  }
+
+  setBusy(button, true, "Publishing...");
+
+  try {
+    let attachmentUrl = null;
+    let attachmentName = null;
+
+    if (file) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `announcements/${Date.now()}_${safeName}`;
+      const fileRef = storageRef(storage, path);
+
+      await uploadBytes(fileRef, file, {
+        contentType: file.type || "application/octet-stream"
+      });
+
+      attachmentUrl = await getDownloadURL(fileRef);
+      attachmentName = file.name;
+    }
+
+    const newRef = push(ref(db, "announcements"));
+
+    await set(newRef, {
+      message_text: message,
+      priority_level: priority,
+      attachment_url: attachmentUrl,
+      attachment_name: attachmentName,
+      published_by: currentUser.uid,
+      published_at: Date.now()
     });
-</script>
 
+    $("announcement-form").reset();
+    showToast("Announcement published.", "success");
+  } catch (error) {
+    console.error("Announcement error:", error);
+    showToast(explainError(error), "error");
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+
+// ========================================================
+// TEACHER: LIVE STUDY LOGS
+// ========================================================
+
+function listenToStudyLogs() {
+  stopLogsListener = onValue(
+    ref(db, "daily_study_logs"),
+    snapshot => {
+      const entries = [];
+
+      snapshot.forEach(child => {
+        entries.push({ id: child.key, ...child.val() });
+      });
+
+      entries.sort((a, b) =>
+        String(b.date || "").localeCompare(String(a.date || ""))
+      );
+
+      $("log-count").textContent =
+        `${entries.length} submission${entries.length === 1 ? "" : "s"}`;
+
+      if (!entries.length) {
+        $("logs-table").innerHTML = `
+          <tr>
+            <td colspan="7" class="text-center text-slate-400 py-10">
+              No study logs have been submitted yet.
+            </td>
+          </tr>`;
+        return;
+      }
+
+      $("logs-table").innerHTML = entries.map(log => {
+        const verified = log.verified_by_teacher === true;
+        const proof = typeof log.proof_image_url === "string"
+          ? log.proof_image_url
+          : "";
+
+        return `
+          <tr>
+            <td>${escapeHTML(log.email || log.student_email || "—")}</td>
+            <td>${escapeHTML(log.date || "—")}</td>
+            <td>${escapeHTML(log.time_spent_minutes ?? "—")} min</td>
+            <td>${escapeHTML(log.questions_solved ?? "—")}</td>
+            <td>
+              ${proof
+                ? `<a href="${escapeHTML(proof)}" target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-indigo-600 font-bold hover:underline">Open proof ↗</a>`
+                : '<span class="text-slate-400">No proof</span>'}
+            </td>
+            <td>
+              <span class="rounded-full px-3 py-1 text-xs font-bold ${
+                verified
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-700"
+              }">
+                ${verified ? "Verified" : "Pending"}
+              </span>
+            </td>
+            <td>
+              ${verified
+                ? '<span class="text-emerald-600 font-bold">Done ✓</span>'
+                : `<button class="btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                           data-verify="${escapeHTML(log.id)}">Verify</button>`}
+            </td>
+          </tr>`;
+      }).join("");
+    },
+    error => {
+      console.error("Study log listener error:", error);
+      $("logs-table").innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center text-red-600 py-10">
+            Cannot load study logs. Check your Realtime Database Rules.
+          </td>
+        </tr>`;
+    }
+  );
+}
+
+$("logs-table").addEventListener("click", async event => {
+  const button = event.target.closest("[data-verify]");
+  if (!button) return;
+
+  if (!currentUser || currentUser.uid !== TEACHER_UID) {
+    showToast("Teacher access is required.", "error");
+    return;
+  }
+
+  const logId = button.dataset.verify;
+
+  button.disabled = true;
+
+  try {
+    await update(ref(db, `daily_study_logs/${logId}`), {
+      verified_by_teacher: true
+    });
+
+    showToast("Study log verified.", "success");
+  } catch (error) {
+    showToast(explainError(error), "error");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+
+// ========================================================
+// STUDENT: READ-ONLY ANNOUNCEMENT FEED
+// ========================================================
+
+function listenToAnnouncements() {
+  const feed = $("announcements-feed");
+
+  stopAnnouncementsListener = onValue(
+    ref(db, "announcements"),
+    snapshot => {
+      const entries = [];
+
+      snapshot.forEach(child => {
+        entries.push({ id: child.key, ...child.val() });
+      });
+
+      entries.sort((a, b) =>
+        Number(b.published_at || 0) - Number(a.published_at || 0)
+      );
+
+      if (!entries.length) {
+        feed.innerHTML = `
+          <div class="text-center py-12">
+            <div class="text-4xl mb-3">📭</div>
+            <p class="font-bold">No announcements yet</p>
+            <p class="text-sm text-slate-400 mt-1">Check back later for class updates.</p>
+          </div>`;
+        return;
+      }
+
+      feed.innerHTML = entries.map(item => {
+        const priority = ["normal", "important", "urgent"].includes(
+          item.priority_level
+        ) ? item.priority_level : "normal";
+
+        const urgent = priority === "urgent";
+
+        const date = item.published_at
+          ? new Date(item.published_at).toLocaleString()
+          : "";
+
+        const attachmentUrl = typeof item.attachment_url === "string"
+          ? item.attachment_url
+          : "";
+
+        return `
+          <article class="rounded-xl p-5 ${
+            urgent ? "urgent-card" : "announcement-card"
+          }">
+            <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+              <span class="text-xs font-extrabold uppercase tracking-wider ${
+                urgent ? "text-red-600" :
+                priority === "important" ? "text-amber-700" : "text-indigo-600"
+              }">
+                ${urgent ? "🔴 URGENT" :
+                  priority === "important" ? "IMPORTANT" : "ANNOUNCEMENT"}
+              </span>
+              <span class="text-xs text-slate-400">${escapeHTML(date)}</span>
+            </div>
+
+            <p class="text-sm leading-7 whitespace-pre-wrap">${escapeHTML(item.message_text || "")}</p>
+
+            ${attachmentUrl ? `
+              <a href="${escapeHTML(attachmentUrl)}" target="_blank"
+                 rel="noopener noreferrer"
+                 class="inline-flex mt-4 text-sm font-bold text-indigo-600 hover:underline">
+                📎 ${escapeHTML(item.attachment_name || "Open attachment")} ↗
+              </a>` : ""}
+          </article>`;
+      }).join("");
+    },
+    error => {
+      console.error("Announcements listener error:", error);
+      feed.innerHTML = `
+        <p class="text-sm text-red-600 py-6">
+          Unable to load announcements. Check your database permissions.
+        </p>`;
+    }
+  );
+}
+
+
+// ========================================================
+// STUDENT: CHECK DAILY SUBMISSION
+// ========================================================
+
+async function checkDailySubmission(user) {
+  const statusBox = $("daily-status");
+  const form = $("daily-log-form");
+  const button = $("daily-log-submit");
+  const key = `${user.uid}_${localDateKey()}`;
+
+  statusBox.classList.add("hidden-view");
+
+  form.querySelectorAll("input").forEach(input => input.disabled = false);
+  button.disabled = false;
+
+  try {
+    const snapshot = await get(ref(db, `daily_study_logs/${key}`));
+
+    if (snapshot.exists()) {
+      const log = snapshot.val();
+
+      statusBox.textContent =
+        `Today's log is already submitted. Questions: ${log.questions_solved}. ` +
+        `Time: ${log.time_spent_minutes} minutes. ` +
+        `Status: ${log.verified_by_teacher ? "Verified" : "Awaiting verification"}.`;
+
+      statusBox.className =
+        "rounded-xl p-4 mb-5 text-sm bg-emerald-50 text-emerald-800";
+
+      form.querySelectorAll("input").forEach(input => input.disabled = true);
+      button.disabled = true;
+    }
+  } catch (error) {
+    console.error("Daily status check error:", error);
+    showToast("Unable to check today's submission. Check your database rules.", "error");
+  }
+}
+
+
+// ========================================================
+// STUDENT: COMPRESS IMAGE, UPLOAD, AND SAVE DAILY LOG
+// ========================================================
+
+$("daily-log-form").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  if (!currentUser || currentUser.uid === TEACHER_UID) {
+    showToast("Please sign in with a student account.", "error");
+    return;
+  }
+
+  if (submittingDailyLog) return;
+  submittingDailyLog = true;
+
+  const button = $("daily-log-submit");
+  setBusy(button, true, "Preparing submission...");
+
+  let uploadedProofPath = null;
+
+  try {
+    const questions = Number($("questions-solved").value);
+    const minutes = Number($("time-spent").value);
+    const file = $("proof-image").files[0];
+
+    if (!Number.isInteger(questions) || questions < 1 || questions > 10000) {
+      throw new Error("Questions solved must be between 1 and 10,000.");
+    }
+
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+      throw new Error("Time spent must be between 1 and 1,440 minutes.");
+    }
+
+    if (!file) throw new Error("Please select a proof image.");
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      throw new Error("Use a JPEG, PNG, or WebP image.");
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      throw new Error("The original image must be 15 MB or smaller.");
+    }
+
+    const user = currentUser;
+    const date = localDateKey();
+    const timestamp = Date.now();
+    const recordKey = `${user.uid}_${date}`;
+    const recordRef = ref(db, `daily_study_logs/${recordKey}`);
+
+    // Friendly duplicate check. Database Rules must also protect this path.
+    const existing = await get(recordRef);
+
+    if (existing.exists()) {
+      throw new Error("Today's math log has already been submitted.");
+    }
+
+    setBusy(button, true, "Compressing image...");
+
+    if (typeof window.imageCompression !== "function") {
+      throw new Error("The image compression library did not load. Refresh and retry.");
+    }
+
+    const compressedFile = await window.imageCompression(file, {
+      maxSizeMB: 0.8,
+      maxWidthOrHeight: 1600,
+      useWebWorker: true,
+      fileType: "image/jpeg"
+    });
+
+    setBusy(button, true, "Uploading proof...");
+
+    const proofPath = `homework-proofs/${user.uid}_${timestamp}.jpg`;
+    const proofRef = storageRef(storage, proofPath);
+
+    await uploadBytes(proofRef, compressedFile, {
+      contentType: "image/jpeg"
+    });
+
+    uploadedProofPath = proofPath;
+
+    const proofUrl = await getDownloadURL(proofRef);
+
+    setBusy(button, true, "Saving daily log...");
+
+    await set(recordRef, {
+      uid: user.uid,
+      email: user.email || "",
+      date,
+      timestamp,
+      questions_solved: questions,
+      time_spent_minutes: minutes,
+      proof_image_url: proofUrl,
+      proof_storage_path: proofPath,
+      verified_by_teacher: false,
+      submitted_at: new Date().toISOString()
+    });
+
+    $("daily-log-form").reset();
+
+    showToast("Daily math log submitted successfully!", "success");
+
+    await checkDailySubmission(user);
+
+  } catch (error) {
+    console.error("Daily log submission error:", error);
+
+    showToast(explainError(error), "error");
+
+    // If the image uploaded but the database write failed, leave it in Storage.
+    // This preserves the proof for diagnosis or later recovery.
+    if (uploadedProofPath) {
+      console.warn("Uploaded proof awaiting a database record:", uploadedProofPath);
+    }
+  } finally {
+    submittingDailyLog = false;
+    setBusy(button, false);
+  }
+});
+
+</script>
 </body>
 </html>
