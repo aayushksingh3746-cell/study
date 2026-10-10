@@ -137,10 +137,26 @@ function getFriendlyError(error) {
 }
 
 // ============================================
+// ROLE CONFIGURATION
+// File: app.js
+// ============================================
+
+const TEACHER_UID = "YNdqDJRyZ1hFAtqrJeZJYScldfc2";
+
+// Your teacher account also has Author/Admin privileges.
+const ADMIN_UIDS = [
+  "YNdqDJRyZ1hFAtqrJeZJYScldfc2"
+];
+
+// ============================================
 // ROLE DETECTION
 // ============================================
 
 function detectRole(uid) {
+  if (!uid) {
+    return "guest";
+  }
+
   if (uid === TEACHER_UID) {
     return "teacher";
   }
@@ -151,6 +167,17 @@ function detectRole(uid) {
 
   return "student";
 }
+
+// Check whether the signed-in user has admin privileges.
+function isAdmin(uid) {
+  return ADMIN_UIDS.includes(uid);
+}
+
+// Check whether the signed-in user has teacher privileges.
+function isTeacher(uid) {
+  return uid === TEACHER_UID;
+}
+
 
 // ============================================
 // AUTHENTICATION TABS
