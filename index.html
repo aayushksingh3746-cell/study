@@ -3,483 +3,695 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0b1020">
-  <title>StudySpace — Virtual Classroom</title>
+  <meta name="theme-color" content="#0f172a">
+  <title>MathClass — Virtual Classroom</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/browser-image-compression/2.0.2/browser-image-compression.js"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1120;
+      --panel: #111a2d;
+      --panel-light: #172238;
+      --border: rgba(148, 163, 184, 0.15);
+      --text: #e5edf9;
+      --muted: #91a0b8;
+      --accent: #818cf8;
+      --accent-light: #a5b4fc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "DM Sans", sans-serif;
+    }
+
+    h1, h2, h3, .brand {
+      font-family: "Manrope", sans-serif;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Preloader */
+    #loadingScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0b1120;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity .3s ease, visibility .3s ease;
+    }
+
+    #loadingScreen.loader-done {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-spinner {
+      width: 46px;
+      height: 46px;
+      border: 3px solid rgba(165, 180, 252, .18);
+      border-top-color: #a5b4fc;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .glass {
+      background: rgba(17, 26, 45, .88);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+    }
+
+    .field {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: #0b1324;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .field:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(129, 140, 248, .12);
+    }
+
+    .field::placeholder {
+      color: #71819b;
+    }
+
+    .primary-btn {
+      background: #818cf8;
+      color: #101426;
+      font-weight: 700;
+      border-radius: 12px;
+      padding: 12px 16px;
+      transition: background .2s, transform .2s;
+    }
+
+    .primary-btn:hover:not(:disabled) {
+      background: #a5b4fc;
+      transform: translateY(-1px);
+    }
+
+    .secondary-btn {
+      border: 1px solid var(--border);
+      background: #172238;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 14px;
+      transition: background .2s;
+    }
+
+    .secondary-btn:hover {
+      background: #202e47;
+    }
+
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      color: var(--muted);
+      border-radius: 12px;
+      transition: .2s;
+    }
+
+    .nav-btn:hover,
+    .nav-btn.active {
+      background: rgba(129, 140, 248, .12);
+      color: #c7d2fe;
+    }
+
+    .nav-btn.active {
+      box-shadow: inset 3px 0 #818cf8;
+    }
+
+    .page-section {
+      animation: appear .25s ease;
+    }
+
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat-bubble {
+      max-width: 85%;
+      padding: 11px 14px;
+      border-radius: 16px;
+      overflow-wrap: anywhere;
+    }
+
+    .chat-bubble.sent {
+      margin-left: auto;
+      background: #373d83;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-bubble.received {
+      margin-right: auto;
+      background: #1b2940;
+      border-bottom-left-radius: 4px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000000;
+      max-width: calc(100vw - 40px);
+      padding: 14px 18px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #172238;
+      color: #e5edf9;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, .3);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .content-card {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .section-heading {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -.04em;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: #c7d2fe;
+      background: rgba(129, 140, 248, .08);
+    }
+
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #34415b;
+      border-radius: 10px;
+    }
+
+    @media (max-width: 767px) {
+      #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 270px;
+        z-index: 100;
+        transform: translateX(-105%);
+        transition: transform .25s ease;
+      }
+
+      #sidebar.sidebar-open {
+        transform: translateX(0);
+      }
+
+      #sidebarBackdrop.visible {
+        display: block !important;
+      }
+
+      .chat-bubble {
+        max-width: 92%;
+      }
+    }
+  </style>
 </head>
 
 <body>
-  <div id="loadingScreen" class="fixed inset-0 z-[100] bg-[#0b1020] flex flex-col items-center justify-center gap-4">
-    <div class="loader"></div>
-    <p id="loadingText" class="muted text-sm">Loading StudySpace...</p>
-  </div>
 
-  <!-- Authentication -->
-  <section id="authScreen" class="hidden min-h-screen flex items-center justify-center p-4"
-    style="background:radial-gradient(ellipse at 10% 10%,#24234e,transparent 42%),radial-gradient(ellipse at 90% 90%,#172b45,transparent 42%),#0b1020">
-
-    <div class="w-full max-w-md">
-      <div class="text-center mb-8">
-        <div class="inline-grid place-items-center w-16 h-16 rounded-2xl bg-indigo-500/15 border border-indigo-400/20 text-indigo-300 text-2xl mb-4">
-          <i class="fa-solid fa-graduation-cap"></i>
-        </div>
-        <h1 class="text-3xl font-extrabold tracking-tight">StudySpace</h1>
-        <p class="muted mt-2">Your classroom. Your progress. One space.</p>
-      </div>
-
-      <div class="panel p-6 sm:p-8">
-        <div class="grid grid-cols-2 gap-2 bg-[#0b1222] rounded-xl p-1 mb-6">
-          <button id="loginModeBtn" class="primary-btn" type="button">Sign in</button>
-          <button id="registerModeBtn" class="secondary-btn" type="button">Register</button>
-        </div>
-
-        <h2 id="authTitle" class="text-xl font-bold mb-1">Welcome back</h2>
-        <p id="authSubtitle" class="muted text-sm mb-6">Sign in to continue to your classroom.</p>
-
-        <form id="authForm" class="space-y-4">
-          <div id="authNameGroup" class="hidden">
-            <label for="authName" class="block text-sm mb-2">Display name</label>
-            <input id="authName" class="field" maxlength="70" placeholder="Your name" autocomplete="name">
-          </div>
-
-          <div>
-            <label for="authEmail" class="block text-sm mb-2">Email address</label>
-            <input id="authEmail" class="field" type="email" required autocomplete="email" placeholder="you@example.com">
-          </div>
-
-          <div>
-            <label for="authPassword" class="block text-sm mb-2">Password</label>
-            <input id="authPassword" class="field" type="password" minlength="6" required autocomplete="current-password" placeholder="At least 6 characters">
-          </div>
-
-          <p id="authError" class="hidden text-sm text-rose-300" role="alert"></p>
-          <button id="authSubmit" class="primary-btn w-full" type="submit">Sign in</button>
-        </form>
-
-        <p class="text-xs muted text-center mt-6">A focused space for learning, sharing and growing.</p>
+  <!-- Preloader -->
+  <div id="loadingScreen" role="status" aria-live="polite">
+    <div class="flex flex-col items-center gap-5">
+      <div class="loader-spinner"></div>
+      <div class="text-center">
+        <p class="brand text-xl font-extrabold tracking-tight">MathClass</p>
+        <p id="loadingText" class="muted text-sm mt-2">
+          Preparing your classroom...
+        </p>
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- Application shell -->
-  <div id="appShell" class="hidden min-h-screen">
-    <div class="min-h-screen md:flex">
+  <!-- Notifications -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-      <aside id="sidebar" class="hidden md:flex md:w-64 lg:w-72 md:flex-col md:fixed md:inset-y-0 bg-[#0e1526] border-r border-[#28344c] z-40">
-        <div class="p-5 border-b border-[#28344c]">
-          <div class="flex items-center gap-3">
-            <div class="w-11 h-11 rounded-xl bg-indigo-500/15 border border-indigo-400/20 grid place-items-center text-indigo-300 text-lg">
-              <i class="fa-solid fa-graduation-cap"></i>
-            </div>
-            <div>
-              <div class="font-extrabold text-lg">StudySpace</div>
-              <div class="muted text-xs">Virtual Classroom</div>
-            </div>
-          </div>
+  <!-- Authentication -->
+  <main id="authScreen" class="hidden min-h-screen items-center justify-center p-5">
+    <div class="w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-400/10 text-indigo-300 text-2xl">
+          <i class="fa-solid fa-square-root-variable"></i>
         </div>
+        <h1 class="brand text-3xl font-extrabold tracking-tight">MathClass</h1>
+        <p class="muted mt-2">Your classroom, organised.</p>
+      </div>
 
-        <div class="px-4 py-5">
-          <div class="flex items-center gap-3 p-3 rounded-xl bg-[#151e33] border border-[#28344c]">
-            <div id="sidebarAvatar" class="avatar">S</div>
-            <div class="min-w-0">
-              <div id="sidebarName" class="text-sm font-semibold truncate">Student</div>
-              <div id="sidebarRole" class="text-xs muted mt-1">Student</div>
-            </div>
-          </div>
-        </div>
-
-        <nav id="sidebarNav" class="flex-1 px-3 space-y-1 overflow-y-auto pb-4" aria-label="Main navigation"></nav>
-
-        <div class="p-4 border-t border-[#28344c]">
-          <button id="logoutBtn" class="sidebar-link text-rose-300 hover:text-rose-200">
-            <i class="fa-solid fa-right-from-bracket"></i>
-            <span>Sign out</span>
+      <div class="glass rounded-3xl p-6 sm:p-8">
+        <div class="grid grid-cols-2 gap-2 mb-6">
+          <button id="loginTab" class="primary-btn" type="button">
+            Sign in
           </button>
-          <p class="muted text-xs mt-4 px-3">Study consistently. Improve daily.</p>
+          <button id="registerTab" class="secondary-btn" type="button">
+            Create account
+          </button>
+        </div>
+
+        <form id="authForm" class="space-y-4">
+          <div id="nameGroup" class="hidden">
+            <label for="displayName" class="block text-sm mb-2">Full name</label>
+            <input id="displayName" class="field" type="text"
+                   placeholder="Your full name" autocomplete="name">
+          </div>
+
+          <div>
+            <label for="email" class="block text-sm mb-2">Email address</label>
+            <input id="email" class="field" type="email" required
+                   placeholder="you@example.com" autocomplete="email">
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm mb-2">Password</label>
+            <input id="password" class="field" type="password" required
+                   minlength="6" placeholder="At least 6 characters"
+                   autocomplete="current-password">
+          </div>
+
+          <button id="submitButton" class="primary-btn w-full" type="submit">
+            <span id="submitText">Sign in</span>
+          </button>
+
+          <button id="forgotPassword" type="button"
+                  class="w-full text-sm text-indigo-300 hover:text-indigo-200">
+            Forgot your password?
+          </button>
+
+          <p id="authMessage" class="text-sm text-center muted"
+             aria-live="polite"></p>
+        </form>
+      </div>
+
+      <p class="muted text-xs text-center mt-6">
+        Secure access to your virtual classroom.
+      </p>
+    </div>
+  </main>
+
+  <!-- Application -->
+  <div id="appShell" class="hidden min-h-screen">
+
+    <div id="sidebarBackdrop"
+         class="hidden fixed inset-0 bg-black/60 z-[90]"
+         aria-hidden="true"></div>
+
+    <div class="flex min-h-screen">
+
+      <!-- Sidebar -->
+      <aside id="sidebar"
+             class="glass w-64 shrink-0 flex flex-col min-h-screen p-5">
+
+        <div class="flex items-center gap-3 px-2 mb-9 mt-2">
+          <div class="h-11 w-11 rounded-xl bg-indigo-400/10 text-indigo-300 flex items-center justify-center text-xl">
+            <i class="fa-solid fa-square-root-variable"></i>
+          </div>
+          <div>
+            <p class="brand font-extrabold text-lg">MathClass</p>
+            <p class="muted text-xs">Virtual Classroom</p>
+          </div>
+        </div>
+
+        <p class="muted uppercase tracking-widest text-[10px] font-bold px-3 mb-3">
+          Workspace
+        </p>
+
+        <nav id="mainNav" class="space-y-1 flex-1">
+          <button class="nav-btn" data-page="profile" type="button">
+            <i class="fa-regular fa-user w-5"></i> Profile
+          </button>
+          <button class="nav-btn" data-page="notices" type="button">
+            <i class="fa-regular fa-bell w-5"></i> Notices
+          </button>
+          <button class="nav-btn" data-page="tracker" type="button">
+            <i class="fa-solid fa-chart-line w-5"></i> Study Tracker
+          </button>
+          <button class="nav-btn" data-page="class-chat" type="button">
+            <i class="fa-regular fa-comments w-5"></i> Class Chat
+          </button>
+          <button class="nav-btn" data-page="ask-doubt" type="button">
+            <i class="fa-regular fa-circle-question w-5"></i> Ask a Doubt
+          </button>
+          <button class="nav-btn hidden" data-page="teacher-dashboard" type="button">
+            <i class="fa-solid fa-chalkboard-user w-5"></i> Teacher Dashboard
+          </button>
+          <button class="nav-btn hidden" data-page="doubt-inbox" type="button">
+            <i class="fa-solid fa-inbox w-5"></i> Doubt Inbox
+          </button>
+          <button class="nav-btn hidden" data-page="admin-panel" type="button">
+            <i class="fa-solid fa-shield-halved w-5"></i> Admin Panel
+          </button>
+        </nav>
+
+        <div class="border-t border-slate-700/50 pt-4 mt-5">
+          <div class="flex items-center gap-3 px-2 mb-4">
+            <div id="userAvatar"
+                 class="w-10 h-10 rounded-full bg-indigo-400/10 text-indigo-200 flex items-center justify-center font-bold">
+              U
+            </div>
+            <div class="min-w-0">
+              <p id="userName" class="font-semibold text-sm truncate">User</p>
+              <p id="userRole" class="muted text-xs capitalize">Student</p>
+            </div>
+          </div>
+
+          <button id="logoutButton" class="secondary-btn w-full text-sm"
+                  type="button">
+            <i class="fa-solid fa-arrow-right-from-bracket mr-2"></i>
+            Sign out
+          </button>
         </div>
       </aside>
 
-      <div class="flex-1 min-w-0 md:ml-64 lg:ml-72">
-        <header class="sticky top-0 z-30 bg-[#0b1020]/95 backdrop-blur-xl border-b border-[#28344c]">
-          <div class="px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3 min-w-0">
-              <button id="mobileMenuBtn" class="md:hidden secondary-btn" type="button" aria-label="Open navigation">
+      <!-- Main -->
+      <div class="flex-1 min-w-0">
+
+        <header class="glass sticky top-0 z-40 px-4 sm:px-8 py-4">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <button id="menuButton"
+                      class="secondary-btn md:hidden px-3 py-2"
+                      type="button" aria-label="Open navigation">
                 <i class="fa-solid fa-bars"></i>
               </button>
-              <div class="min-w-0">
-                <p id="pageEyebrow" class="text-[10px] tracking-[.18em] text-indigo-300 font-bold uppercase">YOUR LEARNING SPACE</p>
-                <h1 id="pageTitle" class="font-bold text-lg truncate">Dashboard</h1>
+              <div>
+                <h2 id="pageTitle" class="font-bold text-lg">Profile</h2>
+                <p id="pageSubtitle" class="muted text-xs">
+                  Your classroom overview
+                </p>
               </div>
             </div>
 
-            <div class="flex items-center gap-3">
-              <div class="hidden sm:block text-right">
-                <div id="headerName" class="text-sm font-semibold">Student</div>
-                <div id="headerEmail" class="muted text-xs"></div>
-              </div>
-              <div id="headerAvatar" class="avatar">S</div>
-            </div>
+            <span class="status-pill">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 mr-2"></span>
+              Classroom
+            </span>
           </div>
         </header>
 
-        <div id="mobileSidebarOverlay" class="hidden fixed inset-0 bg-black/60 z-40 md:hidden"></div>
-        <aside id="mobileSidebar" class="hidden fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-[#0e1526] border-r border-[#28344c] z-50 md:hidden">
-          <div class="p-4 border-b border-[#28344c] flex items-center justify-between">
-            <span class="font-bold">StudySpace</span>
-            <button id="mobileMenuClose" class="secondary-btn" type="button" aria-label="Close navigation">
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-          </div>
-          <div class="p-4 flex items-center gap-3">
-            <div id="mobileAvatar" class="avatar">S</div>
-            <div class="min-w-0">
-              <div id="mobileName" class="font-semibold text-sm truncate">Student</div>
-              <div id="mobileRole" class="muted text-xs">Student</div>
-            </div>
-          </div>
-          <nav id="mobileNav" class="px-3 space-y-1 overflow-y-auto max-h-[70vh]"></nav>
-          <div class="p-4 mt-4 border-t border-[#28344c]">
-            <button id="mobileLogoutBtn" class="sidebar-link text-rose-300" type="button">
-              <i class="fa-solid fa-right-from-bracket"></i> Sign out
-            </button>
-          </div>
-        </aside>
-
-        <main class="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
-          <p id="pageDescription" class="muted text-sm mb-6">Everything you need, in one place.</p>
-
-          <!-- Student dashboard -->
-          <section id="view-home" class="view hidden space-y-6">
-            <div class="panel p-6 sm:p-8 relative overflow-hidden">
-              <div class="absolute -right-12 -top-20 w-64 h-64 bg-indigo-500/10 blur-3xl rounded-full pointer-events-none"></div>
-              <div class="relative">
-                <span class="badge badge-purple mb-4">YOUR LEARNING JOURNEY</span>
-                <h2 class="text-2xl sm:text-3xl font-extrabold">Keep moving forward<span class="text-indigo-300">.</span></h2>
-                <p class="muted max-w-2xl text-sm leading-6 mt-3">Track your practice, ask questions, and stay up to date with your classroom. Small steps every day add up.</p>
-                <div class="flex flex-wrap gap-3 mt-6">
-                  <button class="primary-btn" data-goto="tracker" type="button">Log today's progress <i class="fa-solid fa-arrow-right ml-2"></i></button>
-                  <button class="secondary-btn" data-goto="notices" type="button">View announcements</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div class="stat-card">
-                <p class="muted text-sm">Questions solved today</p>
-                <p id="statQuestions" class="text-3xl font-extrabold mt-2">0</p>
-              </div>
-              <div class="stat-card">
-                <p class="muted text-sm">Study time today</p>
-                <p class="text-3xl font-extrabold mt-2"><span id="statMinutes">0</span><span class="text-sm muted ml-1">mins</span></p>
-              </div>
-              <div class="stat-card">
-                <p class="muted text-sm">Teacher verification</p>
-                <div id="statVerified" class="mt-3"><span class="badge badge-gray">Not submitted</span></div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <div class="panel p-5">
-                <div class="flex justify-between items-center mb-4">
-                  <h2 class="font-bold text-lg">Latest announcements</h2>
-                  <button class="text-sm text-indigo-300" data-goto="notices" type="button">View all →</button>
-                </div>
-                <div id="homeAnnouncements" class="space-y-3"><div class="empty-state">Loading announcements...</div></div>
-              </div>
-
-              <div class="panel p-5">
-                <h2 class="font-bold text-lg mb-4">Quick actions</h2>
-                <div class="space-y-3">
-                  <button class="w-full text-left secondary-btn" data-goto="profile" type="button">
-                    <i class="fa-regular fa-user mr-2"></i> Complete your profile
-                  </button>
-                  <button class="w-full text-left secondary-btn" data-goto="chat" type="button">
-                    <i class="fa-regular fa-comments mr-2"></i> Join class chat
-                  </button>
-                  <button class="w-full text-left secondary-btn" data-goto="doubts" type="button">
-                    <i class="fa-regular fa-circle-question mr-2"></i> Ask a doubt
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
+        <main class="p-4 sm:p-8 max-w-7xl mx-auto space-y-6">
 
           <!-- Profile -->
-          <section id="view-profile" class="view hidden">
-            <div class="panel p-5 sm:p-7 max-w-2xl">
-              <h2 class="font-bold text-lg">Personal information</h2>
-              <p class="muted text-sm mt-1 mb-6">Manage your classroom details.</p>
+          <section id="page-profile" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Your profile</h1>
+              <p class="muted mt-2">Manage your classroom information.</p>
+            </div>
+
+            <div class="content-card max-w-2xl">
               <form id="profileForm" class="space-y-5">
                 <div>
-                  <label class="block text-sm mb-2" for="profileName">Display name</label>
-                  <input id="profileName" class="field" maxlength="70" required placeholder="Your name">
+                  <label for="profileName" class="block text-sm mb-2">
+                    Full name
+                  </label>
+                  <input id="profileName" class="field" required maxlength="80">
                 </div>
+
                 <div>
-                  <label class="block text-sm mb-2" for="profileRoll">Roll number</label>
-                  <input id="profileRoll" class="field" type="number" min="0" max="999999" step="1" required>
+                  <label for="profileRoll" class="block text-sm mb-2">
+                    Roll number
+                  </label>
+                  <input id="profileRoll" class="field" type="number"
+                         min="0" max="99999">
                 </div>
+
                 <div>
-                  <label class="block text-sm mb-2">Email address</label>
-                  <div id="profileEmail" class="field muted"></div>
+                  <label for="profileEmail" class="block text-sm mb-2">
+                    Email address
+                  </label>
+                  <input id="profileEmail" class="field" type="email" disabled>
                 </div>
-                <button class="primary-btn" type="submit">Save profile</button>
+
+                <button class="primary-btn" type="submit">
+                  Save profile
+                </button>
               </form>
             </div>
           </section>
 
           <!-- Notices -->
-          <section id="view-notices" class="view hidden">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-              <p class="muted text-sm">Updates and important classroom information.</p>
-              <span id="noticeCount" class="badge badge-gray">0 announcements</span>
+          <section id="page-notices" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Class notices</h1>
+              <p class="muted mt-2">Announcements and learning materials.</p>
             </div>
-            <div id="announcementFeed" class="space-y-4"><div class="empty-state">Loading announcements...</div></div>
+            <div id="noticesList" class="space-y-4">
+              <div class="content-card muted">Loading notices...</div>
+            </div>
           </section>
 
           <!-- Study tracker -->
-          <section id="view-tracker" class="view hidden">
-            <div class="grid grid-cols-1 xl:grid-cols-5 gap-5">
-              <div class="panel p-5 sm:p-7 xl:col-span-3">
-                <h2 class="font-bold text-lg">Daily study log</h2>
-                <p class="muted text-sm mt-1 mb-6">Record your effort and upload proof.</p>
-                <form id="trackerForm" class="space-y-5">
-                  <div>
-                    <label for="questionsSolved" class="block text-sm mb-2">Questions solved</label>
-                    <input id="questionsSolved" class="field" type="number" min="0" max="100000" step="1" required placeholder="e.g. 25">
-                  </div>
-                  <div>
-                    <label for="timeSpent" class="block text-sm mb-2">Time spent (minutes)</label>
-                    <input id="timeSpent" class="field" type="number" min="1" max="1440" step="1" required placeholder="e.g. 60">
-                  </div>
-                  <div>
-                    <label for="proofImage" class="block text-sm mb-2">Proof image</label>
-                    <input id="proofImage" class="field" type="file" accept="image/*" required>
-                    <p class="muted text-xs mt-2">Images are compressed before upload. Maximum compressed size: 1 MB.</p>
-                    <div id="proofPreview" class="hidden mt-3">
-                      <img id="proofPreviewImage" class="max-h-48 rounded-xl border border-[#28344c]" alt="Proof preview">
-                      <p id="proofPreviewInfo" class="muted text-xs mt-2"></p>
-                    </div>
-                  </div>
-                  <p id="trackerStatus" class="muted text-sm"></p>
-                  <button id="trackerSubmit" class="primary-btn" type="submit">Submit daily log</button>
-                </form>
-              </div>
+          <section id="page-tracker" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Daily study tracker</h1>
+              <p class="muted mt-2">Record your progress and submit proof of study.</p>
+            </div>
 
-              <div class="panel p-5 xl:col-span-2">
-                <h2 class="font-bold text-lg mb-4">Today's summary</h2>
-                <div class="space-y-3">
-                  <div class="p-4 rounded-xl bg-[#0b1222] border border-[#28344c]">
-                    <p class="muted text-sm">Date</p>
-                    <p id="trackerToday" class="font-bold mt-1">—</p>
-                  </div>
-                  <div class="p-4 rounded-xl bg-[#0b1222] border border-[#28344c]">
-                    <p class="muted text-sm">Submission status</p>
-                    <p id="trackerSummaryStatus" class="font-bold mt-1">Not submitted</p>
-                  </div>
-                  <div class="p-4 rounded-xl bg-[#0b1222] border border-[#28344c]">
-                    <p class="muted text-sm">Teacher verification</p>
-                    <p id="trackerSummaryVerification" class="font-bold mt-1">Pending</p>
-                  </div>
+            <div class="content-card max-w-2xl">
+              <form id="trackerForm" class="space-y-5">
+                <div>
+                  <label for="studyDate" class="block text-sm mb-2">
+                    Study date
+                  </label>
+                  <input id="studyDate" class="field" type="date" required>
                 </div>
-                <p class="muted text-xs mt-5 leading-5">Submitting again replaces your existing log for today.</p>
+
+                <div>
+                  <label for="questionsSolved" class="block text-sm mb-2">
+                    Maths questions solved
+                  </label>
+                  <input id="questionsSolved" class="field" type="number"
+                         min="0" max="10000" required placeholder="e.g. 25">
+                </div>
+
+                <div>
+                  <label for="timeSpent" class="block text-sm mb-2">
+                    Study time (minutes)
+                  </label>
+                  <input id="timeSpent" class="field" type="number"
+                         min="1" max="1440" required placeholder="e.g. 60">
+                </div>
+
+                <div>
+                  <label for="studyProof" class="block text-sm mb-2">
+                    Upload study proof
+                  </label>
+                  <input id="studyProof" class="field" type="file"
+                         accept="image/*" required>
+                  <p class="muted text-xs mt-2">
+                    Upload a clear photo of your notebook or completed work.
+                  </p>
+                </div>
+
+                <button id="trackerSubmit" class="primary-btn w-full"
+                        type="submit">
+                  Submit today's progress
+                </button>
+              </form>
+            </div>
+
+            <div class="mt-6">
+              <h2 class="text-lg font-bold mb-3">Your submissions</h2>
+              <div id="trackerHistory" class="space-y-3">
+                <div class="content-card muted">Your study history will appear here.</div>
               </div>
             </div>
           </section>
 
           <!-- Global class chat -->
-          <section id="view-chat" class="view hidden">
-            <div class="panel p-4 sm:p-6">
-              <div class="flex items-center justify-between gap-3 mb-4">
-                <div>
-                  <h2 class="font-bold text-lg">Global class chat</h2>
-                  <p class="muted text-xs mt-1">Connect with your classroom.</p>
-                </div>
-                <span id="chatCount" class="badge badge-gray">0 messages</span>
-              </div>
-              <div id="classChat" class="chat-window mb-4"><div class="empty-state">Loading chat...</div></div>
-              <form id="classChatForm" class="flex gap-2 items-end">
-                <textarea id="classChatInput" class="field resize-none" rows="2" maxlength="1000" required placeholder="Write a message..."></textarea>
-                <button id="classChatSend" class="primary-btn self-stretch" type="submit">Send</button>
-              </form>
-              <p class="muted text-xs mt-2">Messages are visible to authorized classroom users.</p>
+          <section id="page-class-chat" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Class chat</h1>
+              <p class="muted mt-2">Discuss maths with your classmates.</p>
             </div>
-          </section>
 
-          <!-- Student private doubt inbox -->
-          <section id="view-doubts" class="view hidden">
-            <div class="panel p-4 sm:p-6">
-              <h2 class="font-bold text-lg">Ask your teacher</h2>
-              <p class="muted text-sm mt-1 mb-4">A private conversation for your questions.</p>
-              <div id="studentDoubtChat" class="chat-window mb-4"><div class="empty-state">Loading messages...</div></div>
-              <form id="studentDoubtForm" class="flex gap-2 items-end">
-                <textarea id="studentDoubtInput" class="field resize-none" rows="2" maxlength="2000" required placeholder="Describe your doubt..."></textarea>
-                <button id="studentDoubtSend" class="primary-btn self-stretch" type="submit">Send</button>
+            <div class="content-card flex flex-col" style="height: min(65vh, 650px);">
+              <div id="classChatMessages"
+                   class="flex-1 overflow-y-auto space-y-4 pr-2"
+                   aria-live="polite">
+                <p class="muted text-sm">Loading messages...</p>
+              </div>
+
+              <form id="classChatForm" class="flex gap-2 mt-4 pt-4 border-t border-slate-700/50">
+                <input id="classChatInput" class="field flex-1"
+                       maxlength="1000" required
+                       placeholder="Write a message...">
+                <button class="primary-btn px-4" type="submit"
+                        aria-label="Send message">
+                  <i class="fa-solid fa-paper-plane"></i>
+                </button>
               </form>
             </div>
           </section>
 
-          <!-- Admin dashboard -->
-          <section id="view-admin-home" class="view hidden space-y-5">
-            <div class="panel p-6 sm:p-8">
-              <span class="badge badge-red mb-4">ADMIN ACCESS</span>
-              <h2 class="text-2xl font-extrabold">Classroom control centre.</h2>
-              <p class="muted text-sm mt-3">Manage roles, moderate class chat, and oversee classroom activity.</p>
+          <!-- Private doubts -->
+          <section id="page-ask-doubt" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Ask a doubt</h1>
+              <p class="muted mt-2">Send a private question to your teacher.</p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div class="stat-card"><p class="muted text-sm">Registered users</p><p id="adminStatUsers" class="text-3xl font-extrabold mt-2">—</p></div>
-              <div class="stat-card"><p class="muted text-sm">Chat messages</p><p id="adminStatMessages" class="text-3xl font-extrabold mt-2">—</p></div>
-              <div class="stat-card"><p class="muted text-sm">Study logs</p><p id="adminStatLogs" class="text-3xl font-extrabold mt-2">—</p></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button class="panel p-5 text-left hover:border-indigo-400/50 transition" data-goto="admin-panel" type="button">
-                <h3 class="font-bold">Manage teacher access →</h3>
-                <p class="muted text-sm mt-2">Upgrade trusted users to teachers.</p>
-              </button>
-              <button class="panel p-5 text-left hover:border-indigo-400/50 transition" data-goto="admin-chat" type="button">
-                <h3 class="font-bold">Moderate global chat →</h3>
-                <p class="muted text-sm mt-2">Review and remove messages.</p>
-              </button>
-            </div>
-          </section>
 
-          <!-- Admin panel -->
-          <section id="view-admin-panel" class="view hidden">
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <div class="panel p-5 sm:p-7">
-                <h2 class="font-bold text-lg">Role manager</h2>
-                <p class="muted text-sm mt-2 mb-6">Upgrade an existing user to teacher using their exact Firebase UID.</p>
-                <form id="roleForm" class="space-y-4">
-                  <div>
-                    <label for="targetUid" class="block text-sm mb-2">User UID</label>
-                    <input id="targetUid" class="field" required minlength="10" maxlength="128" placeholder="Paste the user's UID">
-                  </div>
-                  <button id="makeTeacherBtn" class="primary-btn" type="submit">Grant teacher role</button>
-                </form>
-                <p class="muted text-xs mt-5 leading-5">Database Security Rules must restrict role changes to the administrator.</p>
+            <div class="content-card flex flex-col max-w-4xl"
+                 style="height: min(65vh, 650px);">
+              <div id="doubtMessages"
+                   class="flex-1 overflow-y-auto space-y-4 pr-2"
+                   aria-live="polite">
+                <p class="muted text-sm">Your conversation will appear here.</p>
               </div>
 
-              <div class="panel p-5 sm:p-7">
-                <h2 class="font-bold text-lg">Administrator account</h2>
-                <p class="muted text-sm mt-2">Only the configured administrator UID receives administrator UI access.</p>
-                <div class="mt-5 p-4 rounded-xl bg-[#0b1222] border border-[#28344c]">
-                  <p class="muted text-xs">Administrator UID</p>
-                  <p class="text-sm font-mono break-all mt-2">YNdqDJRyZ1hFAtqrJeZJYScldfc2</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Admin chat moderator -->
-          <section id="view-admin-chat" class="view hidden">
-            <div class="panel overflow-hidden">
-              <div class="p-5 border-b border-[#28344c] flex items-center justify-between gap-3">
-                <div>
-                  <h2 class="font-bold text-lg">Chat moderator</h2>
-                  <p class="muted text-sm mt-1">Review and remove global chat messages.</p>
-                </div>
-                <span id="moderatorCount" class="badge badge-gray">0 messages</span>
-              </div>
-              <div id="moderatorChatList" class="divide-y divide-[#28344c]"><div class="empty-state m-4">Loading messages...</div></div>
+              <form id="doubtForm" class="flex gap-2 mt-4 pt-4 border-t border-slate-700/50">
+                <input id="doubtInput" class="field flex-1"
+                       maxlength="2000" required
+                       placeholder="Type your maths question...">
+                <button class="primary-btn px-4" type="submit"
+                        aria-label="Send doubt">
+                  <i class="fa-solid fa-paper-plane"></i>
+                </button>
+              </form>
             </div>
           </section>
 
           <!-- Teacher dashboard -->
-          <section id="view-teacher-home" class="view hidden space-y-5">
-            <div class="panel p-6 sm:p-8">
-              <span class="badge badge-green mb-4">TEACHER WORKSPACE</span>
-              <h2 class="text-2xl font-extrabold">Your classroom, at a glance.</h2>
-              <p class="muted text-sm mt-3">Publish notices, verify student work, and answer doubts.</p>
+          <section id="page-teacher-dashboard" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Teacher dashboard</h1>
+              <p class="muted mt-2">Publish notices and review student progress.</p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div class="stat-card"><p class="muted text-sm">Study logs</p><p id="teacherStatLogs" class="text-3xl font-extrabold mt-2">—</p></div>
-              <div class="stat-card"><p class="muted text-sm">Awaiting verification</p><p id="teacherStatPending" class="text-3xl font-extrabold mt-2">—</p></div>
-              <div class="stat-card"><p class="muted text-sm">Doubt inbox</p><p id="teacherStatDoubts" class="text-3xl font-extrabold mt-2">—</p></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button class="panel p-5 text-left hover:border-indigo-400/50 transition" data-goto="teacher-notices" type="button">
-                <h3 class="font-bold">Publish an announcement →</h3>
-                <p class="muted text-sm mt-2">Share regular or urgent classroom updates.</p>
-              </button>
-              <button class="panel p-5 text-left hover:border-indigo-400/50 transition" data-goto="verification" type="button">
-                <h3 class="font-bold">Verify student work →</h3>
-                <p class="muted text-sm mt-2">Review daily study logs and proof images.</p>
-              </button>
-            </div>
-          </section>
 
-          <!-- Teacher dashboard: announcements -->
-          <section id="view-teacher-notices" class="view hidden">
-            <div class="grid grid-cols-1 xl:grid-cols-5 gap-5">
-              <div class="panel p-5 sm:p-7 xl:col-span-2">
-                <h2 class="font-bold text-lg">Publish announcement</h2>
-                <p class="muted text-sm mt-1 mb-6">Share a classroom update.</p>
-                <form id="announcementForm" class="space-y-4">
-                  <div>
-                    <label for="announcementTitle" class="block text-sm mb-2">Title</label>
-                    <input id="announcementTitle" class="field" maxlength="120" required placeholder="Announcement title">
-                  </div>
-                  <div>
-                    <label for="announcementBody" class="block text-sm mb-2">Message</label>
-                    <textarea id="announcementBody" class="field resize-y" rows="5" maxlength="5000" required placeholder="Write your announcement..."></textarea>
-                  </div>
-                  <div>
-                    <label for="announcementPriority" class="block text-sm mb-2">Priority</label>
-                    <select id="announcementPriority" class="field">
-                      <option value="regular">Regular</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label for="announcementFile" class="block text-sm mb-2">PDF attachment (optional)</label>
-                    <input id="announcementFile" class="field" type="file" accept="application/pdf,.pdf">
-                    <p class="muted text-xs mt-2">Maximum 10 MB.</p>
-                  </div>
-                  <button id="publishAnnouncementBtn" class="primary-btn w-full" type="submit">Publish announcement</button>
-                </form>
-              </div>
+            <div class="content-card mb-6">
+              <h2 class="text-lg font-bold mb-5">Publish an announcement</h2>
 
-              <div class="panel p-5 sm:p-6 xl:col-span-3">
-                <div class="flex items-center justify-between gap-3 mb-5">
-                  <h2 class="font-bold text-lg">Published notices</h2>
-                  <span id="teacherNoticeCount" class="badge badge-gray">0</span>
-                </div>
-                <div id="teacherAnnouncementList" class="space-y-3"><div class="empty-state">Loading announcements...</div></div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Teacher verification -->
-          <section id="view-verification" class="view hidden">
-            <div class="panel overflow-hidden">
-              <div class="p-5 border-b border-[#28344c] flex items-center justify-between gap-3 flex-wrap">
+              <form id="announcementForm" class="space-y-4">
                 <div>
-                  <h2 class="font-bold text-lg">Study log verification</h2>
-                  <p class="muted text-sm mt-1">Review daily student submissions.</p>
+                  <label for="announcementTitle" class="block text-sm mb-2">
+                    Title
+                  </label>
+                  <input id="announcementTitle" class="field" maxlength="120"
+                         required placeholder="Announcement title">
                 </div>
-                <span id="verificationCount" class="badge badge-gray">0 logs</span>
-              </div>
-              <div class="table-wrap">
-                <table class="data-table">
+
+                <div>
+                  <label for="announcementMessage" class="block text-sm mb-2">
+                    Message
+                  </label>
+                  <textarea id="announcementMessage" class="field" rows="4"
+                            maxlength="5000" required
+                            placeholder="Write your announcement..."></textarea>
+                </div>
+
+                <div>
+                  <label for="announcementPriority" class="block text-sm mb-2">
+                    Priority
+                  </label>
+                  <select id="announcementPriority" class="field">
+                    <option value="normal">Normal</option>
+                    <option value="important">Important</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="announcementPDF" class="block text-sm mb-2">
+                    Attach PDF (optional)
+                  </label>
+                  <input id="announcementPDF" class="field" type="file"
+                         accept=".pdf,application/pdf">
+                </div>
+
+                <button id="announcementSubmit" class="primary-btn" type="submit">
+                  Publish announcement
+                </button>
+              </form>
+            </div>
+
+            <div class="content-card">
+              <h2 class="text-lg font-bold mb-4">Student study submissions</h2>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
                   <thead>
-                    <tr>
-                      <th>Student</th>
-                      <th>Date</th>
-                      <th>Questions</th>
-                      <th>Time</th>
-                      <th>Proof image</th>
-                      <th>Verification</th>
+                    <tr class="border-b border-slate-700/50 muted">
+                      <th class="p-3">Student</th>
+                      <th class="p-3">Date</th>
+                      <th class="p-3">Questions</th>
+                      <th class="p-3">Time</th>
+                      <th class="p-3">Proof</th>
+                      <th class="p-3">Status</th>
+                      <th class="p-3">Action</th>
                     </tr>
                   </thead>
                   <tbody id="verificationTable">
-                    <tr><td colspan="6" class="text-center muted py-8">Loading study logs...</td></tr>
+                    <tr>
+                      <td colspan="7" class="p-4 muted">
+                        Loading submissions...
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -487,40 +699,111 @@
           </section>
 
           <!-- Teacher doubt inbox -->
-          <section id="view-teacher-doubts" class="view hidden">
-            <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div class="panel p-4">
-                <div class="flex items-center justify-between mb-4">
-                  <h2 class="font-bold">Doubt inbox</h2>
-                  <span id="doubtStudentCount" class="badge badge-gray">0</span>
+          <section id="page-doubt-inbox" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Doubt inbox</h1>
+              <p class="muted mt-2">Respond to private student questions.</p>
+            </div>
+
+            <div class="grid lg:grid-cols-[260px_1fr] gap-5">
+              <div class="content-card">
+                <h2 class="font-bold mb-4">Students</h2>
+                <div id="doubtStudentList" class="space-y-2">
+                  <p class="muted text-sm">Loading students...</p>
                 </div>
-                <div id="doubtStudentList" class="space-y-2"><div class="empty-state">Loading inbox...</div></div>
               </div>
-              <div class="panel p-4 sm:p-5 xl:col-span-2">
-                <div id="selectedDoubtHeader" class="border-b border-[#28344c] pb-4 mb-4">
-                  <h3 class="font-bold">Select a conversation</h3>
-                  <p class="muted text-sm mt-1">Choose a student to view their messages.</p>
+
+              <div class="content-card flex flex-col"
+                   style="height: min(65vh, 650px);">
+                <div id="teacherDoubtMessages"
+                     class="flex-1 overflow-y-auto space-y-4 pr-2"
+                     aria-live="polite">
+                  <p class="muted text-sm">Select a student to view the conversation.</p>
                 </div>
-                <div id="teacherDoubtChat" class="chat-window mb-4"><div class="empty-state">No conversation selected.</div></div>
-                <form id="teacherDoubtForm" class="flex gap-2 items-end">
-                  <textarea id="teacherDoubtInput" class="field resize-none" rows="2" maxlength="2000" required placeholder="Write a reply..." disabled></textarea>
-                  <button id="teacherDoubtSend" class="primary-btn self-stretch" type="submit" disabled>Reply</button>
+
+                <form id="teacherDoubtReplyForm"
+                      class="flex gap-2 mt-4 pt-4 border-t border-slate-700/50">
+                  <input id="teacherDoubtReply" class="field flex-1"
+                         maxlength="2000" required
+                         placeholder="Write a reply..." disabled>
+                  <button id="teacherDoubtReplyButton"
+                          class="primary-btn px-4" type="submit" disabled>
+                    <i class="fa-solid fa-paper-plane"></i>
+                  </button>
                 </form>
               </div>
             </div>
           </section>
 
-          <footer class="mt-12 py-6 border-t border-[#28344c] flex flex-col sm:flex-row gap-2 justify-between text-xs muted">
-            <span>© <span id="footerYear"></span> StudySpace</span>
-            <span>Learn consistently. Improve daily.</span>
-          </footer>
+          <!-- Admin panel -->
+          <section id="page-admin-panel" class="page-section hidden">
+            <div class="mb-6">
+              <h1 class="section-heading">Admin panel</h1>
+              <p class="muted mt-2">Manage classroom roles and moderate class chat.</p>
+            </div>
+
+            <div class="content-card mb-6">
+              <h2 class="text-lg font-bold mb-4">Assign teacher role</h2>
+
+              <form id="roleForm" class="space-y-4 max-w-xl">
+                <div>
+                  <label for="roleEmail" class="block text-sm mb-2">
+                    Registered user's email
+                  </label>
+                  <input id="roleEmail" class="field" type="email"
+                         required placeholder="teacher@example.com">
+                </div>
+
+                <button id="assignTeacherButton" class="primary-btn"
+                        type="submit">
+                  Assign teacher role
+                </button>
+              </form>
+            </div>
+
+            <div class="content-card">
+              <h2 class="text-lg font-bold mb-4">Class chat moderation</h2>
+              <div id="adminChatMessages" class="space-y-3">
+                <p class="muted text-sm">Loading chat messages...</p>
+              </div>
+            </div>
+          </section>
+
+          <p id="dashboardMessage" class="muted text-sm"
+             aria-live="polite"></p>
         </main>
       </div>
     </div>
   </div>
 
-  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <!--
+    Independent emergency fallback.
+    It does not depend on Firebase or app.js loading successfully.
+  -->
+  <script>
+    (() => {
+      const loader = document.getElementById('loadingScreen');
 
-  <script type="module" src="app.js"></script>
+      window.__hideClassroomLoader = function () {
+        if (!loader) return;
+        loader.classList.add('loader-done');
+        loader.setAttribute('aria-hidden', 'true');
+      };
+
+      // Emergency fallback if a module fails to load or initialize.
+      window.setTimeout(window.__hideClassroomLoader, 10000);
+
+      // These listeners are installed before app.js executes.
+      window.addEventListener('error', function () {
+        window.__hideClassroomLoader();
+      });
+
+      window.addEventListener('unhandledrejection', function () {
+        window.__hideClassroomLoader();
+      });
+    })();
+  </script>
+
+  <script type="module" src="./app.js"></script>
 </body>
-                </html>
+</html>
