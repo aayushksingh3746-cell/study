@@ -30,8 +30,7 @@ import {
   createEmptyState,
   createButton,
   openModal,
-  confirmDialog,
-  makeButton
+  confirmDialog
 } from "./components.js";
 
 // ============================================================
@@ -49,19 +48,29 @@ const teacherState = {
 
   initialized: false,
   unsubscribers: [],
+  pageChangeHandler: null,
+
   logs: [],
   announcements: [],
   doubts: [],
   users: [],
+
   currentPage: "dashboard",
   busy: false
 };
 
+// IMPORTANT:
+// These paths must match the database paths used by the
+// student module and the Firebase Realtime Database.
+//
+// If your actual database still uses the old paths, migrate
+// the data or update every module consistently before deploying.
+
 const PATHS = {
   users: "users",
-  logs: "mathLogs",
+  logs: "daily_study_logs",
   announcements: "announcements",
-  doubts: "doubts"
+  doubts: "direct_doubts"
 };
 
 const MAX_ANNOUNCEMENT_LENGTH = 5000;
@@ -78,7 +87,7 @@ function notify(message, type = "info") {
   if (typeof teacherState.toast === "function") {
     teacherState.toast(message, type);
   } else {
-    console.log(`[${type}] ${message}`);
+    console.log(`[Math Class: ${type}] ${message}`);
   }
 }
 
@@ -87,19 +96,25 @@ function currentUID() {
 }
 
 function currentName() {
-  return teacherState.profile?.name ||
+  return (
+    teacherState.profile?.name ||
     teacherState.user?.displayName ||
     teacherState.user?.email?.split("@")[0] ||
-    "Teacher";
+    "Teacher"
+  );
 }
 
 function toArray(value) {
-  if (!value || typeof value !== "object") return [];
+  if (!value || typeof value !== "object") {
+    return [];
+  }
 
-  return Object.entries(value).map(([key, item]) => ({
-    ...item,
-    id: item?.id || key
-  }));
+  return Object.entries(value)
+    .filter(([, item]) => item && typeof item === "object")
+    .map(([key, item]) => ({
+      ...item,
+      id: item.id || key
+    }));
 }
 
 function safeNumber(value) {
@@ -108,20 +123,33 @@ function safeNumber(value) {
 }
 
 function errorMessage(error) {
+  const code = error?.code || "";
+
   const messages = {
-    "PERMISSION_DENIED":
-      "Firebase denied this action. Check your database security rules.",
+    PERMISSION_DENIED:
+      "Firebase denied access. Check the database security rules and teacher permissions.",
+
     "storage/unauthorized":
       "You do not have permission to upload or delete this file.",
+
     "storage/retry-limit-exceeded":
       "The upload failed. Please try again.",
+
+    "storage/canceled":
+      "The upload was cancelled.",
+
+    "storage/object-not-found":
+      "The requested attachment could not be found.",
+
     "auth/network-request-failed":
       "Network error. Check your internet connection."
   };
 
-  return messages[error?.code] ||
+  return (
+    messages[code] ||
     error?.message ||
-    "An unexpected error occurred.";
+    "An unexpected error occurred."
+  );
 }
 
 function reportError(error, action) {
@@ -132,27 +160,60 @@ function reportError(error, action) {
 function element(tag, className = "", text = "") {
   const node = document.createElement(tag);
 
-  if (className) node.className = className;
-  if (text !== "") node.textContent = text;
+  if (className) {
+    node.className = className;
+  }
+
+  if (text !== "") {
+    node.textContent = String(text);
+  }
 
   return node;
 }
 
 function button(label, onClick, variant = "primary") {
-  const node = createButton({
+  return createButton({
     label,
     onClick,
     variant
   });
-
-  return node;
 }
 
-function subscribe(path, callback) {
+function isTeacher() {
+  const role = String(
+    teacherState.profile?.role || "teacher"
+  ).toLowerCase();
+
+  return ["teacher", "admin"].includes(role);
+}
+
+// ============================================================
+// FIREBASE SUBSCRIPTIONS
+// ============================================================
+
+function subscribe(path, callback, label) {
+  if (!teacherState.db) {
+    notify("Database is not initialized.", "error");
+    return () => {};
+  }
+
   const unsubscribe = onValue(
     ref(teacherState.db, path),
-    snapshot => callback(snapshot.val()),
-    error => reportError(error, "Unable to load data")
+
+    snapshot => {
+      try {
+        callback(snapshot.val());
+      } catch (error) {
+        reportError(error, `Could not process ${label}`);
+      }
+    },
+
+    error => {
+      reportError(
+        error,
+        `Could not load ${label} (${path})`
+      );
+    }
   );
 
   teacherState.unsubscribers.push(unsubscribe);
@@ -165,7 +226,9 @@ function subscribe(path, callback) {
 // ============================================================
 
 function injectStyles() {
-  if ($("#teacher-module-styles")) return;
+  if ($("#teacher-module-styles")) {
+    return;
+  }
 
   const style = element("style");
   style.id = "teacher-module-styles";
@@ -198,6 +261,7 @@ function injectStyles() {
       font-size: clamp(24px, 3vw, 32px);
       font-weight: 750;
       letter-spacing: -1px;
+      overflow-wrap: anywhere;
     }
 
     .teacher-description {
@@ -283,6 +347,7 @@ function injectStyles() {
     .teacher-item-content {
       flex: 1;
       min-width: 180px;
+      overflow-wrap: anywhere;
     }
 
     .teacher-item h3 {
@@ -353,6 +418,7 @@ function injectStyles() {
 
     .teacher-filter {
       min-height: 44px;
+      max-width: 100%;
       padding: 10px 12px;
       border: 1px solid #CBD5E1;
       border-radius: 10px;
@@ -362,6 +428,7 @@ function injectStyles() {
     }
 
     .teacher-feedback {
+      box-sizing: border-box;
       width: 100%;
       min-height: 75px;
       margin-top: 10px;
@@ -403,6 +470,7 @@ function injectStyles() {
 
     .teacher-insight-bar {
       height: 9px;
+      min-width: 60px;
       overflow: hidden;
       border-radius: 99px;
       background: #E2E8F0;
@@ -413,13 +481,6 @@ function injectStyles() {
       height: 100%;
       border-radius: inherit;
       background: #4F46E5;
-    }
-
-    .teacher-form-actions {
-      display: flex;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 10px;
     }
 
     @media (max-width: 900px) {
@@ -455,8 +516,11 @@ function getPage(page, title, description = "") {
   let section = $(`[data-page="${page}"]`);
 
   if (!section) {
-    const app = $("#appView") || $("#dashboardView") ||
-      $("#application") || document.body;
+    const app =
+      $("#appView") ||
+      $("#dashboardView") ||
+      $("#application") ||
+      document.body;
 
     section = element("section", "teacher-layout");
     section.dataset.page = page;
@@ -527,7 +591,9 @@ function renderDashboard() {
   ).length;
 
   const unanswered = teacherState.doubts.filter(
-    doubt => !doubt.reply && !["resolved", "closed"].includes(doubt.status)
+    doubt =>
+      !doubt.reply &&
+      !["resolved", "closed"].includes(doubt.status)
   ).length;
 
   const published = teacherState.announcements.filter(
@@ -549,7 +615,10 @@ function renderDashboard() {
 
   section.appendChild(stats);
 
-  const actions = makeSection("Action center", "Focus on the tasks that need attention.");
+  const actions = makeSection(
+    "Action center",
+    "Focus on the tasks that need attention."
+  );
 
   const list = element("div", "teacher-list");
 
@@ -587,7 +656,11 @@ function renderDashboard() {
 
     card.append(
       content,
-      button("Open", () => teacherState.showPage(item.action), "secondary")
+      button(
+        "Open",
+        () => teacherState.showPage?.(item.action),
+        "secondary"
+      )
     );
 
     list.appendChild(card);
@@ -607,9 +680,21 @@ function renderPracticeItem(log) {
 
   content.append(
     element("h3", "", log.topic || "Math practice"),
-    element("p", "", `Student: ${log.studentName || log.studentEmail || log.uid || "Unknown"}`),
-    element("p", "", `Date: ${formatDate(log.date)} · ${safeNumber(log.questions)} questions · ${formatDuration(log.duration)}`),
-    element("p", "", `Submitted: ${formatDateTime(log.createdAt)}`)
+    element(
+      "p",
+      "",
+      `Student: ${log.studentName || log.studentEmail || log.uid || "Unknown"}`
+    ),
+    element(
+      "p",
+      "",
+      `Date: ${formatDate(log.date)} · ${safeNumber(log.questions)} questions · ${formatDuration(log.duration)}`
+    ),
+    element(
+      "p",
+      "",
+      `Submitted: ${formatDateTime(log.createdAt)}`
+    )
   );
 
   if (log.notes) {
@@ -618,41 +703,61 @@ function renderPracticeItem(log) {
 
   if (log.proofURL) {
     const link = document.createElement("a");
+
     link.href = log.proofURL;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.textContent = "View proof image";
+
     content.appendChild(link);
   }
 
-  const status = createStatusBadge(log.status || "submitted");
-  content.appendChild(status);
+  content.appendChild(
+    createStatusBadge(log.status || "submitted")
+  );
 
   const actions = element("div", "teacher-item-actions");
 
   if (!["verified", "rejected"].includes(log.status)) {
     const feedback = document.createElement("textarea");
+
     feedback.className = "teacher-feedback";
     feedback.placeholder = "Optional feedback for the student...";
     feedback.maxLength = 1000;
     feedback.setAttribute("aria-label", "Teacher feedback");
 
-    const approve = button("Verify", async () => {
-      await updateLogStatus(log, "verified", feedback.value.trim());
-    });
-
-    const reject = button("Reject", async () => {
-      const confirmed = await confirmDialog({
-        title: "Reject this practice log?",
-        message: "The student will see the rejection status and your feedback.",
-        confirmLabel: "Reject log",
-        danger: true
-      });
-
-      if (confirmed) {
-        await updateLogStatus(log, "rejected", feedback.value.trim());
+    const approve = button(
+      "Verify",
+      async () => {
+        await updateLogStatus(
+          log,
+          "verified",
+          feedback.value.trim()
+        );
       }
-    }, "danger");
+    );
+
+    const reject = button(
+      "Reject",
+      async () => {
+        const confirmed = await confirmDialog({
+          title: "Reject this practice log?",
+          message:
+            "The student will see the rejection status and your feedback.",
+          confirmLabel: "Reject log",
+          danger: true
+        });
+
+        if (confirmed) {
+          await updateLogStatus(
+            log,
+            "rejected",
+            feedback.value.trim()
+          );
+        }
+      },
+      "danger"
+    );
 
     actions.append(approve, reject);
     content.appendChild(feedback);
@@ -675,7 +780,10 @@ async function updateLogStatus(log, status, feedback) {
 
   try {
     await update(
-      ref(teacherState.db, `${PATHS.logs}/${log.id}`),
+      ref(
+        teacherState.db,
+        `${PATHS.logs}/${log.id}`
+      ),
       {
         status,
         teacherFeedback: feedback,
@@ -692,7 +800,6 @@ async function updateLogStatus(log, status, feedback) {
         : "Practice log rejected.",
       "success"
     );
-
   } catch (error) {
     reportError(error, "Could not update practice log");
   }
@@ -711,8 +818,12 @@ function renderVerification() {
   );
 
   const filter = document.createElement("select");
+
   filter.className = "teacher-filter";
-  filter.setAttribute("aria-label", "Filter practice submissions");
+  filter.setAttribute(
+    "aria-label",
+    "Filter practice submissions"
+  );
 
   [
     ["all", "All submissions"],
@@ -721,8 +832,10 @@ function renderVerification() {
     ["rejected", "Rejected"]
   ].forEach(([value, label]) => {
     const option = document.createElement("option");
+
     option.value = value;
     option.textContent = label;
+
     filter.appendChild(option);
   });
 
@@ -736,29 +849,41 @@ function renderVerification() {
     let logs = [...teacherState.logs];
 
     if (filter.value !== "all") {
-      logs = logs.filter(log => log.status === filter.value);
+      logs = logs.filter(
+        log => (log.status || "submitted") === filter.value
+      );
     }
 
     logs.sort((a, b) => {
-      const aPending = !["verified", "rejected"].includes(a.status);
-      const bPending = !["verified", "rejected"].includes(b.status);
+      const aPending =
+        !["verified", "rejected"].includes(a.status);
 
-      if (aPending !== bPending) return aPending ? -1 : 1;
+      const bPending =
+        !["verified", "rejected"].includes(b.status);
+
+      if (aPending !== bPending) {
+        return aPending ? -1 : 1;
+      }
 
       return safeNumber(b.createdAt) - safeNumber(a.createdAt);
     });
 
     if (!logs.length) {
-      list.appendChild(createEmptyState({
-        icon: "✓",
-        title: "No submissions found",
-        description: "Submissions matching this filter will appear here."
-      }));
+      list.appendChild(
+        createEmptyState({
+          icon: "✓",
+          title: "No submissions found",
+          description:
+            "Submissions matching this filter will appear here."
+        })
+      );
 
       return;
     }
 
-    logs.forEach(log => list.appendChild(renderPracticeItem(log)));
+    logs.forEach(log => {
+      list.appendChild(renderPracticeItem(log));
+    });
   }
 
   filter.addEventListener("change", renderList);
@@ -777,36 +902,55 @@ function renderAnnouncementItem(item) {
   const content = element("div", "teacher-item-content");
 
   content.append(
-    element("h3", "", item.title || "Untitled announcement"),
+    element(
+      "h3",
+      "",
+      item.title || "Untitled announcement"
+    ),
     element("p", "", item.body || item.message || ""),
-    element("p", "", `Created ${formatDateTime(item.createdAt)}`)
+    element(
+      "p",
+      "",
+      `Created ${formatDateTime(item.createdAt)}`
+    )
   );
 
-  const status = createStatusBadge(
-    item.published === false ? "inactive" : "published"
+  content.appendChild(
+    createStatusBadge(
+      item.published === false ? "inactive" : "published"
+    )
   );
-
-  content.appendChild(status);
 
   if (item.attachmentURL) {
     const link = document.createElement("a");
+
     link.href = item.attachmentURL;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.textContent = item.attachmentName || "View attachment";
+    link.textContent =
+      item.attachmentName || "View attachment";
+
     content.appendChild(link);
   }
 
   const actions = element("div", "teacher-item-actions");
 
   actions.append(
-    button("Edit", () => openAnnouncementEditor(item), "secondary"),
+    button(
+      "Edit",
+      () => openAnnouncementEditor(item),
+      "secondary"
+    ),
     button(
       item.published === false ? "Publish" : "Unpublish",
       () => toggleAnnouncementPublished(item),
       "secondary"
     ),
-    button("Delete", () => deleteAnnouncement(item), "danger")
+    button(
+      "Delete",
+      () => deleteAnnouncement(item),
+      "danger"
+    )
   );
 
   card.append(content, actions);
@@ -818,13 +962,18 @@ function openAnnouncementEditor(existing = null) {
   const form = document.createElement("form");
   form.className = "teacher-form";
 
-  const titleField = document.createElement("div");
-  titleField.className = "teacher-field";
+  const titleField = element("div", "teacher-field");
 
-  const titleLabel = element("label", "", "Announcement title");
+  const titleLabel = element(
+    "label",
+    "",
+    "Announcement title"
+  );
+
   titleLabel.htmlFor = "teacherAnnouncementTitle";
 
   const titleInput = document.createElement("input");
+
   titleInput.id = "teacherAnnouncementTitle";
   titleInput.name = "title";
   titleInput.required = true;
@@ -834,57 +983,93 @@ function openAnnouncementEditor(existing = null) {
 
   titleField.append(titleLabel, titleInput);
 
-  const bodyField = document.createElement("div");
-  bodyField.className = "teacher-field";
+  const bodyField = element("div", "teacher-field");
 
-  const bodyLabel = element("label", "", "Announcement details");
+  const bodyLabel = element(
+    "label",
+    "",
+    "Announcement details"
+  );
+
   bodyLabel.htmlFor = "teacherAnnouncementBody";
 
   const bodyInput = document.createElement("textarea");
+
   bodyInput.id = "teacherAnnouncementBody";
   bodyInput.name = "body";
   bodyInput.required = true;
   bodyInput.maxLength = MAX_ANNOUNCEMENT_LENGTH;
-  bodyInput.value = existing?.body || existing?.message || "";
+  bodyInput.value =
+    existing?.body || existing?.message || "";
   bodyInput.placeholder = "Write the announcement...";
 
   bodyField.append(bodyLabel, bodyInput);
 
-  const attachmentField = document.createElement("div");
-  attachmentField.className = "teacher-field";
+  const attachmentField = element("div", "teacher-field");
 
-  const attachmentLabel = element("label", "", "Attachment (optional)");
+  const attachmentLabel = element(
+    "label",
+    "",
+    "Attachment (optional)"
+  );
+
   attachmentLabel.htmlFor = "teacherAnnouncementFile";
 
   const attachmentInput = document.createElement("input");
+
   attachmentInput.id = "teacherAnnouncementFile";
   attachmentInput.type = "file";
-  attachmentInput.accept = ".pdf,image/jpeg,image/png,image/webp";
+  attachmentInput.accept =
+    ".pdf,image/jpeg,image/png,image/webp";
 
-  attachmentField.append(attachmentLabel, attachmentInput);
+  attachmentField.append(
+    attachmentLabel,
+    attachmentInput
+  );
 
-  form.append(titleField, bodyField, attachmentField);
+  form.append(
+    titleField,
+    bodyField,
+    attachmentField
+  );
+
+  let saving = false;
 
   const modal = openModal({
-    title: existing ? "Edit announcement" : "Create announcement",
-    description: "Publish a clear and useful classroom update.",
+    title: existing
+      ? "Edit announcement"
+      : "Create announcement",
+
+    description:
+      "Publish a clear and useful classroom update.",
+
     contentElement: form,
     maxWidth: "620px",
+
     actions: [
       {
         label: "Cancel",
         variant: "secondary"
       },
       {
-        label: existing ? "Save changes" : "Publish announcement",
+        label: existing
+          ? "Save changes"
+          : "Publish announcement",
+
         variant: "primary",
         closeOnClick: false,
+
         onClick: async () => {
+          if (saving) return;
+
           const title = titleInput.value.trim();
           const body = bodyInput.value.trim();
 
           if (!title || !body) {
-            notify("Enter both a title and announcement details.", "warning");
+            notify(
+              "Enter both a title and announcement details.",
+              "warning"
+            );
             return;
           }
 
@@ -893,21 +1078,34 @@ function openAnnouncementEditor(existing = null) {
             return;
           }
 
-          await saveAnnouncement({
-            existing,
-            title,
-            body,
-            file: attachmentInput.files?.[0] || null
-          });
+          saving = true;
 
-          modal.close();
+          try {
+            const success = await saveAnnouncement({
+              existing,
+              title,
+              body,
+              file: attachmentInput.files?.[0] || null
+            });
+
+            if (success) {
+              modal.close();
+            }
+          } finally {
+            saving = false;
+          }
         }
       }
     ]
   });
 }
 
-async function saveAnnouncement({ existing, title, body, file }) {
+async function saveAnnouncement({
+  existing,
+  title,
+  body,
+  file
+}) {
   let uploadedPath = "";
   let attachmentURL = existing?.attachmentURL || "";
   let attachmentName = existing?.attachmentName || "";
@@ -915,8 +1113,12 @@ async function saveAnnouncement({ existing, title, body, file }) {
   try {
     if (file) {
       if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
-        notify(`Attachment must be smaller than ${MAX_ATTACHMENT_MB} MB.`, "warning");
-        return;
+        notify(
+          `Attachment must be no larger than ${MAX_ATTACHMENT_MB} MB.`,
+          "warning"
+        );
+
+        return false;
       }
 
       const allowedTypes = [
@@ -927,93 +1129,155 @@ async function saveAnnouncement({ existing, title, body, file }) {
       ];
 
       if (!allowedTypes.includes(file.type)) {
-        notify("Only PDF, JPG, PNG, and WebP attachments are allowed.", "warning");
-        return;
+        notify(
+          "Only PDF, JPG, PNG, and WebP attachments are allowed.",
+          "warning"
+        );
+
+        return false;
       }
 
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      if (!teacherState.storage) {
+        throw new Error(
+          "Firebase Storage is not initialized."
+        );
+      }
+
+      const safeName = file.name.replace(
+        /[^a-zA-Z0-9._-]/g,
+        "_"
+      );
 
       uploadedPath =
         `teacher-announcements/${currentUID()}/${Date.now()}-${safeName}`;
 
       const uploaded = await uploadBytes(
-        storageRef(teacherState.storage, uploadedPath),
+        storageRef(
+          teacherState.storage,
+          uploadedPath
+        ),
         file,
         { contentType: file.type }
       );
 
-      attachmentURL = await getDownloadURL(uploaded.ref);
+      attachmentURL = await getDownloadURL(
+        uploaded.ref
+      );
+
       attachmentName = file.name;
     }
+
+    const now = Date.now();
 
     const record = {
       title,
       body,
       authorUID: currentUID(),
       authorName: currentName(),
-      published: true,
-      updatedAt: Date.now(),
-      ...(attachmentURL ? { attachmentURL, attachmentName } : {})
+      published: existing
+        ? existing.published !== false
+        : true,
+      updatedAt: now,
+
+      ...(attachmentURL
+        ? { attachmentURL, attachmentName }
+        : {})
     };
 
     if (existing?.id) {
       await update(
-        ref(teacherState.db, `${PATHS.announcements}/${existing.id}`),
+        ref(
+          teacherState.db,
+          `${PATHS.announcements}/${existing.id}`
+        ),
         record
       );
     } else {
       const announcementRef = push(
-        ref(teacherState.db, PATHS.announcements)
+        ref(
+          teacherState.db,
+          PATHS.announcements
+        )
       );
 
       await set(announcementRef, {
         ...record,
         id: announcementRef.key,
-        createdAt: Date.now()
+        createdAt: now
       });
     }
 
     notify(
-      existing ? "Announcement updated." : "Announcement published.",
+      existing
+        ? "Announcement updated."
+        : "Announcement published.",
       "success"
     );
 
+    return true;
   } catch (error) {
     reportError(error, "Could not save announcement");
 
-    if (uploadedPath) {
+    if (uploadedPath && teacherState.storage) {
       try {
-        await deleteObject(storageRef(teacherState.storage, uploadedPath));
-      } catch {
-        // A cleanup failure must not hide the original error.
+        await deleteObject(
+          storageRef(
+            teacherState.storage,
+            uploadedPath
+          )
+        );
+      } catch (cleanupError) {
+        console.warn(
+          "[Math Class Teacher] Attachment cleanup failed:",
+          cleanupError
+        );
       }
     }
+
+    return false;
   }
 }
 
 async function toggleAnnouncementPublished(item) {
-  if (!item.id) return;
+  if (!item.id) {
+    notify("Announcement ID is missing.", "error");
+    return;
+  }
 
   try {
     await update(
-      ref(teacherState.db, `${PATHS.announcements}/${item.id}`),
+      ref(
+        teacherState.db,
+        `${PATHS.announcements}/${item.id}`
+      ),
       {
         published: item.published === false,
         updatedAt: Date.now()
       }
     );
 
-    notify("Announcement visibility updated.", "success");
-
+    notify(
+      "Announcement visibility updated.",
+      "success"
+    );
   } catch (error) {
-    reportError(error, "Could not update announcement");
+    reportError(
+      error,
+      "Could not update announcement"
+    );
   }
 }
 
 async function deleteAnnouncement(item) {
+  if (!item.id) {
+    notify("Announcement ID is missing.", "error");
+    return;
+  }
+
   const confirmed = await confirmDialog({
     title: "Delete announcement?",
-    message: "This removes the announcement from the classroom notice board.",
+    message:
+      "This removes the announcement from the classroom notice board.",
     confirmLabel: "Delete",
     danger: true
   });
@@ -1022,13 +1286,18 @@ async function deleteAnnouncement(item) {
 
   try {
     await remove(
-      ref(teacherState.db, `${PATHS.announcements}/${item.id}`)
+      ref(
+        teacherState.db,
+        `${PATHS.announcements}/${item.id}`
+      )
     );
 
     notify("Announcement deleted.", "success");
-
   } catch (error) {
-    reportError(error, "Could not delete announcement");
+    reportError(
+      error,
+      "Could not delete announcement"
+    );
   }
 }
 
@@ -1045,23 +1314,37 @@ function renderAnnouncements() {
   );
 
   panel.heading.appendChild(
-    button("Create announcement", () => openAnnouncementEditor())
+    button(
+      "Create announcement",
+      () => openAnnouncementEditor()
+    )
   );
 
   const list = element("div", "teacher-list");
 
   if (!teacherState.announcements.length) {
-    list.appendChild(createEmptyState({
-      icon: "✦",
-      title: "No announcements yet",
-      description: "Create your first classroom announcement.",
-      actionLabel: "Create announcement",
-      onAction: () => openAnnouncementEditor()
-    }));
+    list.appendChild(
+      createEmptyState({
+        icon: "✦",
+        title: "No announcements yet",
+        description:
+          "Create your first classroom announcement.",
+        actionLabel: "Create announcement",
+        onAction: () => openAnnouncementEditor()
+      })
+    );
   } else {
     [...teacherState.announcements]
-      .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt))
-      .forEach(item => list.appendChild(renderAnnouncementItem(item)));
+      .sort(
+        (a, b) =>
+          safeNumber(b.createdAt) -
+          safeNumber(a.createdAt)
+      )
+      .forEach(item => {
+        list.appendChild(
+          renderAnnouncementItem(item)
+        );
+      });
   }
 
   panel.section.appendChild(list);
@@ -1077,15 +1360,33 @@ function renderDoubtItem(doubt) {
   const content = element("div", "teacher-item-content");
 
   content.append(
-    element("h3", "", doubt.subject || "Math question"),
-    element("p", "", `From: ${doubt.studentName || doubt.studentEmail || doubt.uid || "Student"}`),
-    element("p", "", `Topic: ${doubt.category || "Other"}`),
+    element(
+      "h3",
+      "",
+      doubt.subject || "Math question"
+    ),
+    element(
+      "p",
+      "",
+      `From: ${doubt.studentName || doubt.studentEmail || doubt.uid || "Student"}`
+    ),
+    element(
+      "p",
+      "",
+      `Topic: ${doubt.category || "Other"}`
+    ),
     element("p", "", doubt.question || ""),
-    element("p", "", `Submitted: ${formatDateTime(doubt.createdAt)}`)
+    element(
+      "p",
+      "",
+      `Submitted: ${formatDateTime(doubt.createdAt)}`
+    )
   );
 
   if (doubt.reply) {
-    content.appendChild(element("p", "", `Your reply: ${doubt.reply}`));
+    content.appendChild(
+      element("p", "", `Your reply: ${doubt.reply}`)
+    );
   }
 
   content.appendChild(
@@ -1107,6 +1408,11 @@ function renderDoubtItem(doubt) {
 }
 
 function openDoubtReply(doubt) {
+  if (!doubt.id) {
+    notify("This doubt has no valid ID.", "error");
+    return;
+  }
+
   const form = document.createElement("form");
   form.className = "teacher-form";
 
@@ -1114,22 +1420,27 @@ function openDoubtReply(doubt) {
   label.htmlFor = "teacherDoubtReply";
 
   const textarea = document.createElement("textarea");
+
   textarea.id = "teacherDoubtReply";
   textarea.maxLength = 3000;
   textarea.required = true;
   textarea.value = doubt.reply || "";
-  textarea.placeholder = "Explain the solution clearly...";
+  textarea.placeholder =
+    "Explain the solution clearly...";
 
   const field = element("div", "teacher-field");
-  field.append(label, textarea);
 
+  field.append(label, textarea);
   form.appendChild(field);
+
+  let sending = false;
 
   const modal = openModal({
     title: "Respond to student",
     description: doubt.subject || "Student doubt",
     contentElement: form,
     maxWidth: "620px",
+
     actions: [
       {
         label: "Cancel",
@@ -1139,18 +1450,30 @@ function openDoubtReply(doubt) {
         label: "Send response",
         variant: "primary",
         closeOnClick: false,
+
         onClick: async () => {
+          if (sending) return;
+
           const reply = textarea.value.trim();
 
           if (!reply) {
-            notify("Write a response before sending.", "warning");
+            notify(
+              "Write a response before sending.",
+              "warning"
+            );
+
             textarea.focus();
             return;
           }
 
+          sending = true;
+
           try {
             await update(
-              ref(teacherState.db, `${PATHS.doubts}/${doubt.id}`),
+              ref(
+                teacherState.db,
+                `${PATHS.doubts}/${doubt.id}`
+              ),
               {
                 reply,
                 status: "resolved",
@@ -1161,11 +1484,19 @@ function openDoubtReply(doubt) {
               }
             );
 
-            notify("Response sent to the student.", "success");
-            modal.close();
+            notify(
+              "Response sent to the student.",
+              "success"
+            );
 
+            modal.close();
           } catch (error) {
-            reportError(error, "Could not send response");
+            reportError(
+              error,
+              "Could not send response"
+            );
+          } finally {
+            sending = false;
           }
         }
       }
@@ -1187,17 +1518,27 @@ function renderDoubts() {
 
   const list = element("div", "teacher-list");
 
-  const doubts = [...teacherState.doubts]
-    .sort((a, b) => safeNumber(b.createdAt) - safeNumber(a.createdAt));
+  const doubts = [...teacherState.doubts].sort(
+    (a, b) =>
+      safeNumber(b.createdAt) -
+      safeNumber(a.createdAt)
+  );
 
   if (!doubts.length) {
-    list.appendChild(createEmptyState({
-      icon: "?",
-      title: "No student doubts",
-      description: "New questions will appear here when submitted."
-    }));
+    list.appendChild(
+      createEmptyState({
+        icon: "?",
+        title: "No student doubts",
+        description:
+          "New questions will appear here when submitted."
+      })
+    );
   } else {
-    doubts.forEach(doubt => list.appendChild(renderDoubtItem(doubt)));
+    doubts.forEach(doubt => {
+      list.appendChild(
+        renderDoubtItem(doubt)
+      );
+    });
   }
 
   panel.section.appendChild(list);
@@ -1223,7 +1564,10 @@ function renderStudentInsights() {
     if (!grouped.has(key)) {
       grouped.set(key, {
         uid: key,
-        name: log.studentName || log.studentEmail || key,
+        name:
+          log.studentName ||
+          log.studentEmail ||
+          key,
         sessions: 0,
         questions: 0,
         minutes: 0,
@@ -1234,16 +1578,25 @@ function renderStudentInsights() {
     const item = grouped.get(key);
 
     item.sessions += 1;
-    item.questions += Math.max(0, safeNumber(log.questions));
-    item.minutes += Math.max(0, safeNumber(log.duration));
+
+    item.questions += Math.max(
+      0,
+      safeNumber(log.questions)
+    );
+
+    item.minutes += Math.max(
+      0,
+      safeNumber(log.duration)
+    );
 
     if (log.status === "verified") {
       item.verified += 1;
     }
   });
 
-  const students = [...grouped.values()]
-    .sort((a, b) => b.questions - a.questions);
+  const students = [...grouped.values()].sort(
+    (a, b) => b.questions - a.questions
+  );
 
   const panel = makeSection(
     "Practice activity",
@@ -1251,11 +1604,14 @@ function renderStudentInsights() {
   );
 
   if (!students.length) {
-    panel.section.appendChild(createEmptyState({
-      icon: "∑",
-      title: "No practice data yet",
-      description: "Student insights will appear after practice logs are submitted."
-    }));
+    panel.section.appendChild(
+      createEmptyState({
+        icon: "∑",
+        title: "No practice data yet",
+        description:
+          "Student insights will appear after practice logs are submitted."
+      })
+    );
 
     section.appendChild(panel.section);
     return;
@@ -1266,7 +1622,11 @@ function renderStudentInsights() {
     ...students.map(student => student.questions)
   );
 
-  const tableWrap = element("div", "teacher-table-wrap");
+  const tableWrap = element(
+    "div",
+    "teacher-table-wrap"
+  );
+
   const table = element("table", "teacher-table");
 
   const thead = document.createElement("thead");
@@ -1280,7 +1640,9 @@ function renderStudentInsights() {
     "Verified",
     "Activity"
   ].forEach(label => {
-    headerRow.appendChild(element("th", "", label));
+    headerRow.appendChild(
+      element("th", "", label)
+    );
   });
 
   thead.appendChild(headerRow);
@@ -1299,11 +1661,18 @@ function renderStudentInsights() {
     );
 
     const activityCell = document.createElement("td");
-    const bar = element("div", "teacher-insight-bar");
+    const bar = element(
+      "div",
+      "teacher-insight-bar"
+    );
+
     const fill = document.createElement("span");
 
     fill.style.width =
-      `${Math.min(100, student.questions / maxQuestions * 100)}%`;
+      `${Math.min(
+        100,
+        student.questions / maxQuestions * 100
+      )}%`;
 
     bar.appendChild(fill);
     activityCell.appendChild(bar);
@@ -1334,7 +1703,9 @@ function renderActionCenter() {
   ).length;
 
   const unanswered = teacherState.doubts.filter(
-    doubt => !doubt.reply && !["resolved", "closed"].includes(doubt.status)
+    doubt =>
+      !doubt.reply &&
+      !["resolved", "closed"].includes(doubt.status)
   ).length;
 
   const items = [
@@ -1350,12 +1721,14 @@ function renderActionCenter() {
     },
     {
       title: "Classroom communications",
-      description: "Create or update a class announcement.",
+      description:
+        "Create or update a class announcement.",
       page: "announcements"
     },
     {
       title: "Learning insights",
-      description: "Explore recorded student practice activity.",
+      description:
+        "Explore recorded student practice activity.",
       page: "student-insights"
     }
   ];
@@ -1365,7 +1738,10 @@ function renderActionCenter() {
 
   items.forEach(item => {
     const card = element("article", "teacher-item");
-    const content = element("div", "teacher-item-content");
+    const content = element(
+      "div",
+      "teacher-item-content"
+    );
 
     content.append(
       element("h3", "", item.title),
@@ -1374,7 +1750,11 @@ function renderActionCenter() {
 
     card.append(
       content,
-      button("Open", () => teacherState.showPage(item.page), "secondary")
+      button(
+        "Open",
+        () => teacherState.showPage?.(item.page),
+        "secondary"
+      )
     );
 
     list.appendChild(card);
@@ -1413,6 +1793,9 @@ function renderCurrentPage() {
     case "student-insights":
       renderStudentInsights();
       break;
+
+    default:
+      renderDashboard();
   }
 }
 
@@ -1430,33 +1813,45 @@ function renderAllPages() {
 // ============================================================
 
 function loadLogs() {
-  return subscribe(PATHS.logs, value => {
-    teacherState.logs = toArray(value);
+  return subscribe(
+    PATHS.logs,
+    value => {
+      teacherState.logs = toArray(value);
 
-    if (teacherState.initialized) {
-      renderCurrentPage();
-    }
-  });
+      if (teacherState.initialized) {
+        renderCurrentPage();
+      }
+    },
+    "practice logs"
+  );
 }
 
 function loadAnnouncements() {
-  return subscribe(PATHS.announcements, value => {
-    teacherState.announcements = toArray(value);
+  return subscribe(
+    PATHS.announcements,
+    value => {
+      teacherState.announcements = toArray(value);
 
-    if (teacherState.initialized) {
-      renderCurrentPage();
-    }
-  });
+      if (teacherState.initialized) {
+        renderCurrentPage();
+      }
+    },
+    "announcements"
+  );
 }
 
 function loadDoubts() {
-  return subscribe(PATHS.doubts, value => {
-    teacherState.doubts = toArray(value);
+  return subscribe(
+    PATHS.doubts,
+    value => {
+      teacherState.doubts = toArray(value);
 
-    if (teacherState.initialized) {
-      renderCurrentPage();
-    }
-  });
+      if (teacherState.initialized) {
+        renderCurrentPage();
+      }
+    },
+    "student doubts"
+  );
 }
 
 // ============================================================
@@ -1468,11 +1863,24 @@ function cleanup() {
     try {
       unsubscribe();
     } catch (error) {
-      console.warn("[Math Class Teacher] Listener cleanup failed:", error);
+      console.warn(
+        "[Math Class Teacher] Listener cleanup failed:",
+        error
+      );
     }
   });
 
   teacherState.unsubscribers = [];
+
+  if (teacherState.pageChangeHandler) {
+    window.removeEventListener(
+      "mathclass:pagechange",
+      teacherState.pageChangeHandler
+    );
+
+    teacherState.pageChangeHandler = null;
+  }
+
   teacherState.initialized = false;
 }
 
@@ -1486,22 +1894,45 @@ export async function init(context) {
   teacherState.auth = context.auth;
   teacherState.db = context.db;
   teacherState.user = context.user;
-  teacherState.profile = context.profile;
+  teacherState.profile = context.profile || null;
   teacherState.toast = context.toast;
   teacherState.showPage = context.showPage;
 
-  const config = await import("./firebase-config.js");
-  teacherState.storage = config.storage;
-
   if (!teacherState.user?.uid) {
-    throw new Error("A signed-in teacher account is required.");
+    throw new Error(
+      "A signed-in teacher account is required."
+    );
   }
 
-  if (context.role !== "teacher") {
-    throw new Error("This module is only for teacher accounts.");
+  const contextRole = String(
+    context.role ||
+    teacherState.profile?.role ||
+    ""
+  ).toLowerCase();
+
+  if (
+    !["teacher", "admin"].includes(contextRole)
+  ) {
+    throw new Error(
+      "This module is only for authorized teacher accounts."
+    );
+  }
+
+  const config = await import("./firebase-config.js");
+
+  teacherState.storage = config.storage;
+
+  if (!teacherState.storage) {
+    console.warn(
+      "[Math Class Teacher] Firebase Storage is unavailable."
+    );
   }
 
   injectStyles();
+
+  teacherState.logs = [];
+  teacherState.announcements = [];
+  teacherState.doubts = [];
 
   teacherState.currentPage = "dashboard";
   teacherState.initialized = true;
@@ -1512,12 +1943,25 @@ export async function init(context) {
   loadAnnouncements();
   loadDoubts();
 
-  window.addEventListener("mathclass:pagechange", event => {
-    if (event.detail?.role !== "teacher") return;
+  teacherState.pageChangeHandler = event => {
+    const role = String(
+      event.detail?.role || ""
+    ).toLowerCase();
 
-    teacherState.currentPage = event.detail.page || "dashboard";
+    if (role && !["teacher", "admin"].includes(role)) {
+      return;
+    }
+
+    teacherState.currentPage =
+      event.detail?.page || "dashboard";
+
     renderCurrentPage();
-  });
+  };
+
+  window.addEventListener(
+    "mathclass:pagechange",
+    teacherState.pageChangeHandler
+  );
 
   return {
     cleanup,
