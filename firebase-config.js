@@ -48,7 +48,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
 
 // ============================================================
-// EXISTING FIREBASE PROJECT
+// FIREBASE PROJECT CONFIGURATION
 // ============================================================
 
 const firebaseConfig = {
@@ -67,12 +67,16 @@ const firebaseConfig = {
 // INITIALIZE FIREBASE SERVICES
 // ============================================================
 
+// Initialize the Firebase application once.
 const app = initializeApp(firebaseConfig);
 
+// Initialize Firebase Authentication.
 const auth = getAuth(app);
 
+// Initialize Firebase Realtime Database.
 const db = getDatabase(app);
 
+// Initialize Firebase Storage.
 const storage = getStorage(app);
 
 // ============================================================
@@ -113,7 +117,7 @@ export {
   limitToLast,
   serverTimestamp,
 
-  // Cloud Storage
+  // Firebase Storage
   storageRef,
   uploadBytes,
   uploadBytesResumable,
