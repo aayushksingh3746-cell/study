@@ -4,502 +4,879 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut
 } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
 
 import {
   ref,
   get,
-  onValue,
   set,
-  update,
-  push
+  update
 } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js';
 
-import { initializeAdmin } from './admin.js';
-import { initializeTeacher } from './teacher.js';
-import { initializeStudent } from './student.js';
+import { initAdmin } from './admin.js';
+import { initTeacher } from './teacher.js';
+import { initStudent } from './student.js';
 
-export const ADMIN_UID = 'YNdqDJRyZ1hFAtqrJeZJYScldfc2';
+const ADMIN_UID = 'YNdqDJRyZ1hFAtqrJeZJYScldfc2';
 
-export let currentUser = null;
-export let currentRole = null;
-export let currentProfile = {};
+const $ = id => document.getElementById(id);
 
-export const $ = id => document.getElementById(id);
-
-export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, character => ({
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;'
-})[character]);
-
-export const formatDate = value => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? 'Unknown date'
-    : date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+const state = {
+  user: null,
+  profile: null,
+  role: null,
+  authMode: 'login',
+  activePage: null,
+  initialized: {
+    admin: false,
+    teacher: false,
+    student: false
+  }
 };
 
-export const getLocalDate = () => {
-  const date = new Date();
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
-  ].join('-');
-};
+let toastTimer = null;
+let authListenerStarted = false;
+let authSubmissionInProgress = false;
 
-export const toArray = value => value
-  ? Object.entries(value).map(([id, data]) => ({ id, ...(data || {}) }))
-  : [];
+/* -------------------------------------------------------
+   PRELOADER
+------------------------------------------------------- */
 
-let toastTimeout;
-let authGeneration = 0;
-let profileListener = null;
-let sharedAnnouncementListener = null;
-let sharedAnnouncementCallback = null;
-let sharedAnnouncementValue = [];
-let studentModuleInitialized = false;
-let teacherModuleInitialized = false;
-let adminModuleInitialized = false;
+function hidePreloader() {
+  const loader = $('loadingScreen');
 
-const routeMetadata = {
-  home: ['YOUR LEARNING SPACE', 'Dashboard', 'Your progress and classroom updates.'],
-  profile: ['YOUR ACCOUNT', 'My Profile', 'Manage your classroom details.'],
-  notices: ['STAY INFORMED', 'Notice Board', 'Updates and important classroom information.'],
-  tracker: ['BUILD YOUR HABITS', 'Daily Study Tracker', 'Log your work and share proof with your teacher.'],
-  chat: ['CLASSROOM COMMUNITY', 'Class Chat', 'Learn together and help each other.'],
-  doubts: ['PERSONAL SUPPORT', 'Ask a Doubt', 'A private conversation with your teacher.'],
-  'admin-home': ['SYSTEM ADMINISTRATION', 'Admin Dashboard', 'Monitor classroom activity and access.'],
-  'admin-panel': ['ACCESS CONTROL', 'Role Manager', 'Assign teacher permissions to trusted accounts.'],
-  'admin-chat': ['COMMUNITY SAFETY', 'Chat Moderator', 'Moderate global classroom messages.'],
-  'teacher-home': ['TEACHER WORKSPACE', 'Teacher Dashboard', 'Manage student progress and classroom communication.'],
-  'teacher-notices': ['CLASSROOM UPDATES', 'Announcements', 'Publish regular or urgent notices.'],
-  verification: ['STUDENT PROGRESS', 'Study Log Verification', 'Review and verify daily student submissions.'],
-  'teacher-doubts': ['STUDENT SUPPORT', 'Doubt Inbox', 'Select a student and reply to their questions.']
-};
+  if (loader) {
+    loader.classList.add('loader-done');
+    loader.setAttribute('aria-hidden', 'true');
+  }
 
-const navigationByRole = {
-  student: [
-    ['home', 'Overview', 'fa-house'],
-    ['profile', 'My Profile', 'fa-user'],
-    ['notices', 'Notice Board', 'fa-bullhorn'],
-    ['tracker', 'Daily Tracker', 'fa-chart-line'],
-    ['chat', 'Class Chat', 'fa-comments'],
-    ['doubts', 'Ask a Doubt', 'fa-circle-question']
-  ],
-  teacher: [
-    ['teacher-home', 'Overview', 'fa-house'],
-    ['teacher-notices', 'Announcements', 'fa-bullhorn'],
-    ['verification', 'Study Logs', 'fa-clipboard-check'],
-    ['teacher-doubts', 'Doubt Inbox', 'fa-inbox'],
-    ['chat', 'Class Chat', 'fa-comments'],
-    ['notices', 'Notice Board', 'fa-list']
-  ],
-  admin: [
-    ['admin-home', 'Overview', 'fa-gauge-high'],
-    ['admin-panel', 'Role Manager', 'fa-user-shield'],
-    ['admin-chat', 'Chat Moderator', 'fa-shield-halved'],
-    ['verification', 'Study Logs', 'fa-clipboard-check'],
-    ['teacher-doubts', 'Doubt Inbox', 'fa-inbox'],
-    ['teacher-notices', 'Announcements', 'fa-bullhorn']
-  ]
-};
+  if (typeof window.__hideClassroomLoader === 'function') {
+    window.__hideClassroomLoader();
+  }
+}
 
-const allowedRoutes = {
-  student: ['home', 'profile', 'notices', 'tracker', 'chat', 'doubts'],
-  teacher: ['teacher-home', 'teacher-notices', 'verification', 'teacher-doubts', 'chat', 'notices'],
-  admin: ['admin-home', 'admin-panel', 'admin-chat', 'verification', 'teacher-doubts', 'teacher-notices']
-};
+function updateLoadingText(message) {
+  const element = $('loadingText');
+  if (element) element.textContent = message;
+}
 
-export function showToast(message, type = 'info') {
-  const element = $('toast');
+// Never allow an initialization failure to cover the screen indefinitely.
+const emergencyLoaderTimer = window.setTimeout(hidePreloader, 10000);
+
+window.addEventListener('error', event => {
+  console.error('Classroom JavaScript error:', event.error || event.message);
+  hidePreloader();
+});
+
+window.addEventListener('unhandledrejection', event => {
+  console.error('Unhandled classroom promise rejection:', event.reason);
+  hidePreloader();
+});
+
+/* -------------------------------------------------------
+   HELPERS
+------------------------------------------------------- */
+
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[char]);
+}
+
+function showToast(message, type = 'info') {
+  const toast = $('toast');
+  if (!toast) return;
+
+  const icons = {
+    success: 'fa-circle-check',
+    error: 'fa-circle-exclamation',
+    info: 'fa-circle-info'
+  };
+
+  const colors = {
+    success: 'text-emerald-300',
+    error: 'text-rose-300',
+    info: 'text-indigo-300'
+  };
+
+  toast.innerHTML = `
+    <div class="flex items-start gap-3">
+      <i class="fa-solid ${icons[type] || icons.info} ${colors[type] || colors.info} mt-1"></i>
+      <span>${escapeHTML(message)}</span>
+    </div>
+  `;
+
+  toast.classList.remove('hidden');
+
+  clearTimeout(toastTimer);
+
+  toastTimer = setTimeout(() => {
+    toast.classList.add('hidden');
+  }, 3500);
+}
+
+function setAuthMessage(message, isError = false) {
+  const element = $('authMessage');
   if (!element) return;
 
   element.textContent = message;
-  element.className = `toast ${type}`;
-  clearTimeout(toastTimeout);
-
-  toastTimeout = setTimeout(() => {
-    element.classList.add('hidden');
-  }, 4000);
+  element.className = isError
+    ? 'text-sm text-center text-rose-300'
+    : 'text-sm text-center muted';
 }
 
-export function setLoading(visible, message = 'Loading StudySpace...') {
-  const screen = $('loadingScreen');
-  if (!screen) return;
-  $('loadingText').textContent = message;
-  screen.classList.toggle('hidden', !visible);
+function setDashboardMessage(message) {
+  const element = $('dashboardMessage');
+  if (element) element.textContent = message || '';
 }
 
-function setAuthMode(mode) {
-  const register = mode === 'register';
+function setButtonBusy(button, busy, busyText = 'Please wait...') {
+  if (!button) return;
 
-  $('loginModeBtn').className = register ? 'secondary-btn' : 'primary-btn';
-  $('registerModeBtn').className = register ? 'primary-btn' : 'secondary-btn';
+  if (busy) {
+    if (!button.dataset.originalHtml) {
+      button.dataset.originalHtml = button.innerHTML;
+    }
 
-  $('authNameGroup').classList.toggle('hidden', !register);
-  $('authName').required = register;
+    button.disabled = true;
+    button.innerHTML = `
+      <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+      ${escapeHTML(busyText)}
+    `;
+  } else {
+    button.disabled = false;
 
-  $('authTitle').textContent = register ? 'Create your account' : 'Welcome back';
-  $('authSubtitle').textContent = register
-    ? 'Join your classroom in a few steps.'
-    : 'Sign in to continue to your classroom.';
+    if (button.dataset.originalHtml) {
+      button.innerHTML = button.dataset.originalHtml;
+      delete button.dataset.originalHtml;
+    }
+  }
+}
 
-  $('authSubmit').textContent = register ? 'Create account' : 'Sign in';
-  $('authPassword').autocomplete = register ? 'new-password' : 'current-password';
-  $('authError').classList.add('hidden');
+function localDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
 
-  $('authForm').dataset.mode = mode;
+  return `${year}-${month}-${day}`;
+}
+
+function formatTime(timestamp) {
+  if (!timestamp) return '';
+
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleString([], {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
 }
 
 function getFriendlyError(error) {
+  const code = error?.code || '';
+
   const messages = {
     'auth/email-already-in-use': 'An account with this email already exists.',
     'auth/invalid-email': 'Please enter a valid email address.',
     'auth/invalid-credential': 'Incorrect email or password.',
-    'auth/user-not-found': 'No account was found for this email.',
+    'auth/user-not-found': 'No account was found with this email.',
     'auth/wrong-password': 'Incorrect email or password.',
-    'auth/weak-password': 'Use a stronger password with at least 6 characters.',
+    'auth/weak-password': 'Please use a stronger password.',
+    'auth/too-many-requests': 'Too many attempts. Please try again later.',
     'auth/network-request-failed': 'Network error. Check your internet connection.',
-    'auth/too-many-requests': 'Too many attempts. Try again later.',
-    'PERMISSION_DENIED': 'Firebase denied this operation. Check your database rules.',
-    'storage/unauthorized': 'Storage access denied. Check your storage rules.'
+    'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase.',
+    'auth/unauthorized-domain': 'This website domain is not authorised in Firebase Authentication.',
+    'PERMISSION_DENIED': 'Firebase denied access. Please check your database rules.'
   };
 
-  return messages[error?.code] || error?.message || 'Something went wrong. Please try again.';
+  return messages[code] || error?.message || 'Something went wrong. Please try again.';
 }
 
-function showAuthentication() {
-  $('appShell').classList.add('hidden');
-  $('authScreen').classList.remove('hidden');
+/* -------------------------------------------------------
+   GLOBAL API FOR THE OTHER MODULES
+------------------------------------------------------- */
+
+window.classroom = {
+  get user() {
+    return state.user;
+  },
+
+  get profile() {
+    return state.profile;
+  },
+
+  get role() {
+    return state.role;
+  },
+
+  escapeHTML,
+  showToast,
+  formatTime,
+  localDateString,
+  setDashboardMessage,
+
+  async refreshProfile() {
+    if (!state.user) return null;
+
+    const snapshot = await get(ref(db, `users/${state.user.uid}`));
+
+    state.profile = snapshot.exists() ? snapshot.val() : null;
+
+    return state.profile;
+  }
+};
+
+/* -------------------------------------------------------
+   AUTH SCREEN
+------------------------------------------------------- */
+
+function showLoginScreen() {
+  $('authScreen')?.classList.remove('hidden');
+  $('authScreen')?.classList.add('flex');
+  $('appShell')?.classList.add('hidden');
 }
 
-function hideAuthentication() {
-  $('authScreen').classList.add('hidden');
-  $('appShell').classList.remove('hidden');
+function showAppScreen() {
+  $('authScreen')?.classList.add('hidden');
+  $('authScreen')?.classList.remove('flex');
+  $('appShell')?.classList.remove('hidden');
 }
 
-function renderNavigation() {
-  const links = navigationByRole[currentRole] || navigationByRole.student;
+function setAuthMode(mode) {
+  state.authMode = mode === 'register' ? 'register' : 'login';
 
-  const createLink = ([page, label, icon]) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `sidebar-link ${window.currentPage === page ? 'active' : ''}`;
-    button.dataset.page = page;
-    button.innerHTML = `<i class="fa-solid ${icon}"></i><span>${escapeHTML(label)}</span>`;
-    button.addEventListener('click', () => navigate(page));
-    return button;
-  };
+  const isRegister = state.authMode === 'register';
 
-  for (const navId of ['sidebarNav', 'mobileNav']) {
-    const nav = $(navId);
-    nav.replaceChildren();
-    links.forEach(link => nav.appendChild(createLink(link)));
+  $('nameGroup')?.classList.toggle('hidden', !isRegister);
+
+  if ($('displayName')) {
+    $('displayName').required = isRegister;
   }
+
+  if ($('password')) {
+    $('password').autocomplete = isRegister
+      ? 'new-password'
+      : 'current-password';
+  }
+
+  const loginTab = $('loginTab');
+  const registerTab = $('registerTab');
+
+  if (loginTab) {
+    loginTab.className = isRegister
+      ? 'secondary-btn'
+      : 'primary-btn';
+  }
+
+  if (registerTab) {
+    registerTab.className = isRegister
+      ? 'primary-btn'
+      : 'secondary-btn';
+  }
+
+  if ($('submitText')) {
+    $('submitText').textContent = isRegister
+      ? 'Create account'
+      : 'Sign in';
+  }
+
+  setAuthMessage('');
 }
 
-function renderIdentity() {
-  const name = currentProfile.displayName || 'New Student';
-  const role = currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
-  const initial = name.trim().charAt(0).toUpperCase() || 'S';
+async function handleAuthSubmit(event) {
+  event.preventDefault();
 
-  for (const id of ['headerName', 'sidebarName', 'mobileName']) {
-    $(id).textContent = name;
-  }
+  if (authSubmissionInProgress) return;
 
-  for (const id of ['headerEmail', 'profileEmail']) {
-    if ($(id)) $(id).textContent = id === 'profileEmail'
-      ? (currentUser.email || '—')
-      : (currentUser.email || '');
-  }
+  const email = $('email')?.value.trim();
+  const password = $('password')?.value;
+  const displayName = $('displayName')?.value.trim();
 
-  for (const id of ['sidebarRole', 'mobileRole']) {
-    $(id).textContent = `${role} workspace`;
-  }
-
-  for (const id of ['sidebarAvatar', 'headerAvatar', 'mobileAvatar']) {
-    $(id).textContent = initial;
-  }
-
-  $('footerYear').textContent = new Date().getFullYear();
-}
-
-export function navigate(page) {
-  if (!currentUser || !(allowedRoutes[currentRole] || []).includes(page)) {
-    showToast('You do not have permission to open that page.', 'error');
+  if (!email || !password) {
+    setAuthMessage('Enter your email address and password.', true);
     return;
   }
 
-  window.currentPage = page;
+  if (state.authMode === 'register' && !displayName) {
+    setAuthMessage('Enter your full name.', true);
+    return;
+  }
 
-  document.querySelectorAll('.view').forEach(section => section.classList.add('hidden'));
+  const button = $('submitButton');
 
-  const target = $(`view-${page}`);
-  if (target) target.classList.remove('hidden');
+  authSubmissionInProgress = true;
+  setButtonBusy(button, true, 'Connecting...');
+  setAuthMessage('');
 
-  const [eyebrow, title, description] = routeMetadata[page] || ['STUDYSPACE', 'Dashboard', ''];
+  try {
+    if (state.authMode === 'register') {
+      const credential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
 
-  $('pageEyebrow').textContent = eyebrow;
-  $('pageTitle').textContent = title;
-  $('pageDescription').textContent = description;
+      const uid = credential.user.uid;
 
-  renderNavigation();
-  closeMobileMenu();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+      const initialProfile = {
+        displayName,
+        email,
+        role: uid === ADMIN_UID ? 'admin' : 'student',
+        rollNumber: 0,
+        createdAt: Date.now()
+      };
 
-  document.dispatchEvent(new CustomEvent('studyspace:route', {
-    detail: { page, role: currentRole, uid: currentUser.uid }
-  }));
-}
+      try {
+        await set(ref(db, `users/${uid}`), initialProfile);
+      } catch (databaseError) {
+        // Auth creation has already succeeded. Sign out rather than
+        // leave the user in a half-configured session.
+        console.error('Could not create the user profile:', databaseError);
 
-function closeMobileMenu() {
-  $('mobileSidebar').classList.add('hidden');
-  $('mobileSidebarOverlay').classList.add('hidden');
-}
+        await signOut(auth);
 
-function openMobileMenu() {
-  $('mobileSidebar').classList.remove('hidden');
-  $('mobileSidebarOverlay').classList.remove('hidden');
-}
+        throw new Error(
+          'Your account was created, but your profile could not be saved. Check your Firebase Database rules and try signing in again.'
+        );
+      }
 
-function detachProfileListener() {
-  if (profileListener) {
-    profileListener();
-    profileListener = null;
+      showToast('Your account has been created.', 'success');
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      showToast('Welcome back!', 'success');
+    }
+
+  } catch (error) {
+    console.error('Authentication failed:', error);
+    setAuthMessage(getFriendlyError(error), true);
+
+  } finally {
+    authSubmissionInProgress = false;
+    setButtonBusy(button, false);
   }
 }
 
-function detachSharedAnnouncementListener() {
-  if (sharedAnnouncementListener) {
-    sharedAnnouncementListener();
-    sharedAnnouncementListener = null;
+async function handlePasswordReset() {
+  const email = $('email')?.value.trim();
+
+  if (!email) {
+    setAuthMessage('Enter your email address first.', true);
+    $('email')?.focus();
+    return;
+  }
+
+  const button = $('forgotPassword');
+
+  if (button) button.disabled = true;
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    setAuthMessage('If an account exists for this address, a reset email will be sent.');
+  } catch (error) {
+    console.error('Password reset failed:', error);
+    setAuthMessage(getFriendlyError(error), true);
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 
-function resetSession() {
-  detachProfileListener();
-  detachSharedAnnouncementListener();
+/* -------------------------------------------------------
+   PROFILE AND ROLE INITIALISATION
+------------------------------------------------------- */
 
-  currentUser = null;
-  currentRole = null;
-  currentProfile = {};
-  sharedAnnouncementValue = [];
-
-  document.dispatchEvent(new CustomEvent('studyspace:logout'));
-}
-
-function bindSharedAnnouncements(generation) {
-  detachSharedAnnouncementListener();
-
-  sharedAnnouncementListener = onValue(ref(db, 'announcements'), snapshot => {
-    if (generation !== authGeneration) return;
-
-    sharedAnnouncementValue = Object.entries(snapshot.val() || {})
-      .map(([id, data]) => ({ id, ...data }))
-      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-
-    document.dispatchEvent(new CustomEvent('studyspace:announcements', {
-      detail: sharedAnnouncementValue
-    }));
-  }, error => {
-    console.error('Announcement listener failed:', error);
-    showToast(getFriendlyError(error), 'error');
-  });
-}
-
-export function getAnnouncements() {
-  return [...sharedAnnouncementValue];
-}
-
-async function initializeAuthenticatedSession(user, generation) {
-  currentUser = user;
-  currentProfile = {};
+async function hydrateUser(user) {
+  updateLoadingText('Loading your classroom...');
 
   let profile = null;
 
-  if (user.uid !== ADMIN_UID) {
+  try {
     const snapshot = await get(ref(db, `users/${user.uid}`));
-    profile = snapshot.val();
 
-    if (!profile) {
+    if (snapshot.exists()) {
+      profile = snapshot.val();
+    } else {
+      // Support an authenticated account without a database profile.
+      // The server-side rules must still enforce who can write this path.
       profile = {
-        role: 'student',
-        displayName: 'New Student',
-        rollNumber: 0
+        displayName: user.displayName || user.email?.split('@')[0] || 'Student',
+        email: user.email || '',
+        role: user.uid === ADMIN_UID ? 'admin' : 'student',
+        rollNumber: 0,
+        createdAt: Date.now()
       };
 
-      await set(ref(db, `users/${user.uid}`), {
-        ...profile,
-        email: user.email || '',
-        createdAt: Date.now()
-      });
+      await set(ref(db, `users/${user.uid}`), profile);
     }
-  }
 
-  if (generation !== authGeneration || auth.currentUser?.uid !== user.uid) return;
+    // This specific UID is recognised as the administrator in the UI.
+    // Database rules must independently protect administrator privileges.
+    if (user.uid === ADMIN_UID) {
+      profile.role = 'admin';
 
-  if (user.uid === ADMIN_UID) {
-    currentRole = 'admin';
-    currentProfile = {
-      ...(profile || {}),
-      role: 'admin',
-      displayName: profile?.displayName || 'Administrator',
-      rollNumber: profile?.rollNumber ?? 0
-    };
-  } else {
-    currentProfile = profile || {
-      role: 'student',
-      displayName: 'New Student',
+      if (snapshot.exists() && snapshot.val().role !== 'admin') {
+        await update(ref(db, `users/${user.uid}`), {
+          role: 'admin'
+        });
+      }
+    }
+
+  } catch (error) {
+    console.error('Profile loading failed:', error);
+
+    // Do not trap the user behind the preloader if the database is
+    // unavailable. Show a limited session and explain the problem.
+    profile = {
+      displayName: user.displayName || user.email?.split('@')[0] || 'User',
+      email: user.email || '',
+      role: user.uid === ADMIN_UID ? 'admin' : 'student',
       rollNumber: 0
     };
 
-    currentRole = ['student', 'teacher'].includes(currentProfile.role)
-      ? currentProfile.role
-      : 'student';
+    showToast(
+      'Your account is signed in, but your profile could not be loaded. Some features may be unavailable.',
+      'error'
+    );
   }
 
-  renderIdentity();
-  renderNavigation();
-  hideAuthentication();
+  state.user = user;
+  state.profile = profile;
+  state.role = user.uid === ADMIN_UID
+    ? 'admin'
+    : (profile.role || 'student');
 
-  bindSharedAnnouncements(generation);
+  window.classroom.user = user;
 
-  if (currentRole === 'student' && !studentModuleInitialized) {
-    await initializeStudent();
-    studentModuleInitialized = true;
-  }
+  updateUserInterface();
 
-  if (currentRole === 'teacher' && !teacherModuleInitialized) {
-    await initializeTeacher();
-    teacherModuleInitialized = true;
-  }
+  showAppScreen();
 
-  if (currentRole === 'admin' && !adminModuleInitialized) {
-    await initializeAdmin();
-    adminModuleInitialized = true;
-  }
+  // Ensure the loader disappears before optional dashboard modules run.
+  hidePreloader();
 
-  if (generation !== authGeneration || auth.currentUser?.uid !== user.uid) return;
+  clearTimeout(emergencyLoaderTimer);
 
-  navigate({
-    student: 'home',
-    teacher: 'teacher-home',
-    admin: 'admin-home'
-  }[currentRole]);
+  initialiseRoleModules();
 
-  setLoading(false);
+  const preferredPage = state.role === 'admin'
+    ? 'admin-panel'
+    : state.role === 'teacher'
+      ? 'teacher-dashboard'
+      : 'profile';
+
+  setPage(preferredPage);
 }
 
-$('loginModeBtn').addEventListener('click', () => setAuthMode('login'));
-$('registerModeBtn').addEventListener('click', () => setAuthMode('register'));
+function updateUserInterface() {
+  const profile = state.profile || {};
+  const displayName =
+    profile.displayName ||
+    state.user?.displayName ||
+    state.user?.email?.split('@')[0] ||
+    'User';
 
-$('authForm').addEventListener('submit', async event => {
+  if ($('userName')) {
+    $('userName').textContent = displayName;
+  }
+
+  if ($('userRole')) {
+    $('userRole').textContent = state.role || 'student';
+  }
+
+  if ($('userAvatar')) {
+    $('userAvatar').textContent =
+      displayName.trim().charAt(0).toUpperCase() || 'U';
+  }
+
+  if ($('profileName')) {
+    $('profileName').value = profile.displayName || displayName;
+  }
+
+  if ($('profileRoll')) {
+    $('profileRoll').value = profile.rollNumber ?? 0;
+  }
+
+  if ($('profileEmail')) {
+    $('profileEmail').value = state.user?.email || '';
+  }
+
+  const teacherPages = [
+    'teacher-dashboard',
+    'doubt-inbox'
+  ];
+
+  const studentPages = [
+    'profile',
+    'notices',
+    'tracker',
+    'class-chat',
+    'ask-doubt'
+  ];
+
+  document.querySelectorAll('[data-page]').forEach(button => {
+    const page = button.dataset.page;
+
+    let visible = studentPages.includes(page);
+
+    if (state.role === 'teacher') {
+      visible = visible || teacherPages.includes(page);
+    }
+
+    if (state.role === 'admin') {
+      visible = page === 'admin-panel';
+    }
+
+    button.classList.toggle('hidden', !visible);
+  });
+}
+
+/* -------------------------------------------------------
+   ROLE MODULES
+------------------------------------------------------- */
+
+function safeInitialise(label, callback) {
+  try {
+    const result = callback();
+
+    if (result && typeof result.catch === 'function') {
+      result.catch(error => {
+        console.error(`${label} initialisation failed:`, error);
+        showToast(`${label} could not be fully loaded.`, 'error');
+        hidePreloader();
+      });
+    }
+  } catch (error) {
+    console.error(`${label} initialisation failed:`, error);
+    showToast(`${label} could not be fully loaded.`, 'error');
+  }
+}
+
+function initialiseRoleModules() {
+  if (!state.user) return;
+
+  if (!state.initialized.student) {
+    state.initialized.student = true;
+
+    safeInitialise('Student features', () => {
+      initStudent(state.user);
+    });
+  }
+
+  if (state.role === 'teacher' && !state.initialized.teacher) {
+    state.initialized.teacher = true;
+
+    safeInitialise('Teacher dashboard', () => {
+      initTeacher(state.user);
+    });
+  }
+
+  if (state.role === 'admin' && !state.initialized.admin) {
+    state.initialized.admin = true;
+
+    safeInitialise('Admin dashboard', () => {
+      initAdmin(state.user);
+    });
+  }
+}
+
+/* -------------------------------------------------------
+   SPA NAVIGATION
+------------------------------------------------------- */
+
+const pageInformation = {
+  profile: {
+    title: 'Your profile',
+    subtitle: 'Manage your classroom information'
+  },
+  notices: {
+    title: 'Class notices',
+    subtitle: 'Announcements and learning materials'
+  },
+  tracker: {
+    title: 'Study tracker',
+    subtitle: 'Track your daily learning progress'
+  },
+  'class-chat': {
+    title: 'Class chat',
+    subtitle: 'Discuss maths with your classmates'
+  },
+  'ask-doubt': {
+    title: 'Ask a doubt',
+    subtitle: 'Private communication with your teacher'
+  },
+  'teacher-dashboard': {
+    title: 'Teacher dashboard',
+    subtitle: 'Announcements and student verification'
+  },
+  'doubt-inbox': {
+    title: 'Doubt inbox',
+    subtitle: 'Private student conversations'
+  },
+  'admin-panel': {
+    title: 'Admin panel',
+    subtitle: 'Manage roles and classroom moderation'
+  }
+};
+
+function setPage(page) {
+  const pageElement = $(`page-${page}`);
+
+  if (!pageElement || pageElement.classList.contains('hidden') &&
+      !document.querySelector(`[data-page="${page}"]:not(.hidden)`)) {
+    // A section may be accessible directly after the role has changed,
+    // but unavailable pages should not be shown.
+    if (!pageElement || !document.querySelector(`[data-page="${page}"]:not(.hidden)`)) {
+      return;
+    }
+  }
+
+  if (state.role === 'student' &&
+      ['teacher-dashboard', 'doubt-inbox', 'admin-panel'].includes(page)) {
+    return;
+  }
+
+  if (state.role === 'teacher' && page === 'admin-panel') {
+    return;
+  }
+
+  if (state.role === 'admin' && page !== 'admin-panel') {
+    return;
+  }
+
+  document.querySelectorAll('.page-section').forEach(section => {
+    section.classList.add('hidden');
+  });
+
+  pageElement.classList.remove('hidden');
+
+  document.querySelectorAll('[data-page]').forEach(button => {
+    button.classList.toggle('active', button.dataset.page === page);
+  });
+
+  const info = pageInformation[page] || {
+    title: 'Classroom',
+    subtitle: ''
+  };
+
+  if ($('pageTitle')) $('pageTitle').textContent = info.title;
+  if ($('pageSubtitle')) $('pageSubtitle').textContent = info.subtitle;
+
+  state.activePage = page;
+
+  closeMobileSidebar();
+}
+
+function openMobileSidebar() {
+  $('sidebar')?.classList.add('sidebar-open');
+  $('sidebarBackdrop')?.classList.add('visible');
+}
+
+function closeMobileSidebar() {
+  $('sidebar')?.classList.remove('sidebar-open');
+  $('sidebarBackdrop')?.classList.remove('visible');
+}
+
+/* -------------------------------------------------------
+   PROFILE FORM
+------------------------------------------------------- */
+
+async function saveProfile(event) {
   event.preventDefault();
 
-  const mode = $('authForm').dataset.mode || 'login';
-  const email = $('authEmail').value.trim();
-  const password = $('authPassword').value;
-  const displayName = $('authName').value.trim();
-  const button = $('authSubmit');
+  if (!state.user) return;
 
-  $('authError').classList.add('hidden');
+  const displayName = $('profileName')?.value.trim();
+  const rollValue = $('profileRoll')?.value;
 
-  if (mode === 'register' && !displayName) {
-    $('authError').textContent = 'Please enter your display name.';
-    $('authError').classList.remove('hidden');
+  if (!displayName) {
+    showToast('Please enter your name.', 'error');
     return;
   }
 
-  button.disabled = true;
-  button.textContent = mode === 'register' ? 'Creating account...' : 'Signing in...';
+  const rollNumber = Number(rollValue || 0);
 
-  try {
-    if (mode === 'register') {
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
-
-      await set(ref(db, `users/${credential.user.uid}`), {
-        role: 'student',
-        displayName: 'New Student',
-        rollNumber: 0,
-        email: credential.user.email || email,
-        createdAt: Date.now()
-      });
-
-      if (displayName && displayName !== 'New Student') {
-        await update(ref(db, `users/${credential.user.uid}`), {
-          displayName: displayName.slice(0, 70)
-        });
-      }
-    } else {
-      await signInWithEmailAndPassword(auth, email, password);
-    }
-  } catch (error) {
-    console.error(error);
-    $('authError').textContent = getFriendlyError(error);
-    $('authError').classList.remove('hidden');
-  } finally {
-    button.disabled = false;
-    button.textContent = mode === 'register' ? 'Create account' : 'Sign in';
+  if (!Number.isInteger(rollNumber) || rollNumber < 0) {
+    showToast('Please enter a valid roll number.', 'error');
+    return;
   }
-});
 
-async function handleSignOut() {
+  const button = $('profileForm')?.querySelector('button[type="submit"]');
+
+  setButtonBusy(button, true, 'Saving...');
+
   try {
-    await signOut(auth);
+    await update(ref(db, `users/${state.user.uid}`), {
+      displayName,
+      rollNumber,
+      email: state.user.email || ''
+    });
+
+    state.profile = {
+      ...state.profile,
+      displayName,
+      rollNumber,
+      email: state.user.email || ''
+    };
+
+    updateUserInterface();
+
+    showToast('Profile updated successfully.', 'success');
+
   } catch (error) {
+    console.error('Profile update failed:', error);
     showToast(getFriendlyError(error), 'error');
+
+  } finally {
+    setButtonBusy(button, false);
   }
 }
 
-$('logoutBtn').addEventListener('click', handleSignOut);
-$('mobileLogoutBtn').addEventListener('click', handleSignOut);
-$('mobileMenuBtn').addEventListener('click', openMobileMenu);
-$('mobileMenuClose').addEventListener('click', closeMobileMenu);
-$('mobileSidebarOverlay').addEventListener('click', closeMobileMenu);
+/* -------------------------------------------------------
+   SIGN OUT
+------------------------------------------------------- */
 
-document.addEventListener('click', event => {
-  const button = event.target.closest('[data-goto]');
-  if (button) navigate(button.dataset.goto);
-});
+async function handleLogout() {
+  const button = $('logoutButton');
 
-onAuthStateChanged(auth, async user => {
-  const generation = ++authGeneration;
-  resetSession();
-
-  if (!user) {
-    showAuthentication();
-    setLoading(false);
-    return;
-  }
-
-  setLoading(true, 'Preparing your classroom...');
+  setButtonBusy(button, true, 'Signing out...');
 
   try {
-    await initializeAuthenticatedSession(user, generation);
+    await signOut(auth);
+    showToast('You have signed out.', 'success');
   } catch (error) {
-    console.error('Session initialization failed:', error);
+    console.error('Sign out failed:', error);
     showToast(getFriendlyError(error), 'error');
-
-    if (generation === authGeneration) {
-      showAuthentication();
-      setLoading(false);
-    }
+  } finally {
+    setButtonBusy(button, false);
   }
-});
+}
 
-window.addEventListener('offline', () => {
-  showToast('You are offline. Some features may not work.', 'error');
-});
+/* -------------------------------------------------------
+   AUTHENTICATION STATE
+------------------------------------------------------- */
 
-window.addEventListener('online', () => {
-  showToast('Connection restored.', 'success');
-});
+function startAuthenticationListener() {
+  if (authListenerStarted) return;
 
-setAuthMode('login');
-$('footerYear').textContent = new Date().getFullYear();
-setLoading(true);
+  authListenerStarted = true;
+  updateLoadingText('Checking your account...');
+
+  onAuthStateChanged(
+    auth,
+
+    async user => {
+      try {
+        if (user) {
+          await hydrateUser(user);
+        } else {
+          state.user = null;
+          state.profile = null;
+          state.role = null;
+          state.activePage = null;
+
+          showLoginScreen();
+
+          hidePreloader();
+          clearTimeout(emergencyLoaderTimer);
+        }
+      } catch (error) {
+        console.error('Authentication state processing failed:', error);
+
+        // Crucial: do not leave the user looking at an endless loader.
+        hidePreloader();
+        clearTimeout(emergencyLoaderTimer);
+
+        if (auth.currentUser) {
+          showAppScreen();
+          showToast(
+            'Some classroom features could not load. Check your connection and Firebase permissions.',
+            'error'
+          );
+        } else {
+          showLoginScreen();
+        }
+      }
+    },
+
+    error => {
+      console.error('Firebase authentication listener failed:', error);
+
+      hidePreloader();
+      clearTimeout(emergencyLoaderTimer);
+
+      showLoginScreen();
+
+      setAuthMessage(
+        'Authentication could not be checked. Please reload the page or check your connection.',
+        true
+      );
+    }
+  );
+}
+
+/* -------------------------------------------------------
+   STARTUP
+------------------------------------------------------- */
+
+function initialiseInterface() {
+  $('loginTab')?.addEventListener('click', () => setAuthMode('login'));
+
+  $('registerTab')?.addEventListener('click', () => setAuthMode('register'));
+
+  $('authForm')?.addEventListener('submit', handleAuthSubmit);
+
+  $('forgotPassword')?.addEventListener('click', handlePasswordReset);
+
+  $('logoutButton')?.addEventListener('click', handleLogout);
+
+  $('profileForm')?.addEventListener('submit', saveProfile);
+
+  $('menuButton')?.addEventListener('click', openMobileSidebar);
+
+  $('sidebarBackdrop')?.addEventListener('click', closeMobileSidebar);
+
+  document.querySelectorAll('[data-page]').forEach(button => {
+    button.addEventListener('click', () => {
+      setPage(button.dataset.page);
+    });
+  });
+
+  // The initial auth state callback controls the actual screen.
+  setAuthMode('login');
+
+  if ($('studyDate') && !$('studyDate').value) {
+    $('studyDate').value = localDateString();
+  }
+}
+
+function startApp() {
+  try {
+    initialiseInterface();
+    startAuthenticationListener();
+  } catch (error) {
+    console.error('Application startup failed:', error);
+
+    hidePreloader();
+    clearTimeout(emergencyLoaderTimer);
+
+    showLoginScreen();
+
+    setAuthMessage(
+      'The application could not start correctly. Check your JavaScript imports and reload.',
+      true
+    );
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp, { once: true });
+} else {
+  startApp();
+                  }
