@@ -1,29 +1,40 @@
-// Firebase SDK imports — Version 10.5.0
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
+// ============================================================
+// MATH CLASS — FIREBASE CONFIGURATION
+// Firebase Modular SDK 10.5.0
+// ============================================================
+
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 
 import {
   getAuth,
-  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  onAuthStateChanged,
   updateProfile,
-  setPersistence,
-  browserLocalPersistence
+  updatePassword,
+  sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
 import {
   getDatabase,
   ref,
-  set,
   get,
+  set,
   update,
   remove,
   push,
   onValue,
+  off,
   query,
   orderByChild,
   equalTo,
+  limitToLast,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
 
@@ -36,11 +47,15 @@ import {
   deleteObject
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
 
-// Firebase project configuration
+// ============================================================
+// EXISTING FIREBASE PROJECT
+// ============================================================
+
 const firebaseConfig = {
   apiKey: "AIzaSyDQ3bYoj549-7hFeieHHMAValS757IWsTY",
   authDomain: "study-c3017.firebaseapp.com",
-  databaseURL: "https://study-c3017-default-rtdb.asia-southeast1.firebasedatabase.app",
+  databaseURL:
+    "https://study-c3017-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "study-c3017",
   storageBucket: "study-c3017.firebasestorage.app",
   messagingSenderId: "533271518437",
@@ -48,15 +63,22 @@ const firebaseConfig = {
   measurementId: "G-PYCYLLF5E2"
 };
 
-// Initialize Firebase
+// ============================================================
+// INITIALIZE FIREBASE SERVICES
+// ============================================================
+
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
 const auth = getAuth(app);
+
 const db = getDatabase(app);
+
 const storage = getStorage(app);
 
-// Export Firebase services
+// ============================================================
+// EXPORT SHARED INSTANCES AND FUNCTIONS
+// ============================================================
+
 export {
   app,
   auth,
@@ -65,25 +87,30 @@ export {
   firebaseConfig,
 
   // Authentication
-  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  onAuthStateChanged,
   updateProfile,
-  setPersistence,
-  browserLocalPersistence,
+  updatePassword,
+  sendPasswordResetEmail,
 
   // Realtime Database
   ref,
-  set,
   get,
+  set,
   update,
   remove,
   push,
   onValue,
+  off,
   query,
   orderByChild,
   equalTo,
+  limitToLast,
   serverTimestamp,
 
   // Cloud Storage
