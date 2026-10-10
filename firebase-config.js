@@ -1,30 +1,46 @@
-// ============================================================
-// MATH CLASS — VIRTUAL LEARNING PORTAL
-// File: firebase-config.js
-// Purpose: Firebase initialization and shared service exports
-// ============================================================
-
+// Firebase SDK imports — Version 10.5.0
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 
 import {
-  getAuth
+  getAuth,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  setPersistence,
+  browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
 import {
-  getDatabase
+  getDatabase,
+  ref,
+  set,
+  get,
+  update,
+  remove,
+  push,
+  onValue,
+  query,
+  orderByChild,
+  equalTo,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
 
 import {
-  getStorage
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
 
-// ============================================================
-// FIREBASE PROJECT CONFIGURATION
-// ============================================================
-
+// Firebase project configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDQ3bYoj549-7hFeieHHMAValS757IWsTY",
   authDomain: "study-c3017.firebaseapp.com",
+  databaseURL: "https://study-c3017-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "study-c3017",
   storageBucket: "study-c3017.firebasestorage.app",
   messagingSenderId: "533271518437",
@@ -32,29 +48,48 @@ const firebaseConfig = {
   measurementId: "G-PYCYLLF5E2"
 };
 
-// ============================================================
-// INITIALIZE FIREBASE
-// ============================================================
-
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Authentication
+// Initialize Firebase services
 const auth = getAuth(app);
-
-// Realtime Database
 const db = getDatabase(app);
-
-// Cloud Storage
 const storage = getStorage(app);
 
-// ============================================================
-// EXPORT SHARED INSTANCES
-// ============================================================
-
+// Export Firebase services
 export {
   app,
   auth,
   db,
   storage,
-  firebaseConfig
+  firebaseConfig,
+
+  // Authentication
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  setPersistence,
+  browserLocalPersistence,
+
+  // Realtime Database
+  ref,
+  set,
+  get,
+  update,
+  remove,
+  push,
+  onValue,
+  query,
+  orderByChild,
+  equalTo,
+  serverTimestamp,
+
+  // Cloud Storage
+  storageRef,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
 };
