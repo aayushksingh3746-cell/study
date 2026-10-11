@@ -1,1010 +1,1098 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#4F46E5">
-  <meta name="color-scheme" content="light">
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
 
-  <title>Math Class — Virtual Learning Portal</title>
   <meta
     name="description"
-    content="Your personal mathematics learning space for daily practice, doubts, announcements, and progress tracking."
+    content="Math Class Virtual Classroom — announcements, daily practice, classroom discussion and private doubt solving."
   >
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750;800&display=swap"
-    rel="stylesheet"
-  >
+  <meta name="theme-color" content="#4f46e5">
 
-  <link rel="stylesheet" href="./style.css">
+  <title>Math Class Portal</title>
 
-  <noscript>
-    <style>
-      #appLoader {
-        display: none !important;
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: "#eef2ff",
+              100: "#e0e7ff",
+              500: "#6366f1",
+              600: "#4f46e5",
+              700: "#4338ca",
+              800: "#3730a3"
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      color-scheme: light;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* -------------------------------------------------------
+       LOADER
+    ------------------------------------------------------- */
+
+    .loader {
+      width: 38px;
+      height: 38px;
+      border: 3px solid #e0e7ff;
+      border-top-color: #4f46e5;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* -------------------------------------------------------
+       APP
+    ------------------------------------------------------- */
+
+    #appShell {
+      min-height: 100vh;
+    }
+
+    #mainContent {
+      min-width: 0;
+    }
+
+    #pageContent {
+      min-height: calc(100vh - 80px);
+    }
+
+    /* -------------------------------------------------------
+       SIDEBAR
+    ------------------------------------------------------- */
+
+    .sidebar {
+      width: 280px;
+      flex-shrink: 0;
+    }
+
+    .nav-button {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: #64748b;
+      padding: 11px 13px;
+      border-radius: 12px;
+      text-align: left;
+      cursor: pointer;
+      transition:
+        background 0.18s ease,
+        color 0.18s ease,
+        transform 0.18s ease;
+    }
+
+    .nav-button:hover {
+      background: #f8fafc;
+      color: #4338ca;
+    }
+
+    .nav-button.active {
+      background: #eef2ff;
+      color: #4338ca;
+      font-weight: 700;
+    }
+
+    .nav-button:active {
+      transform: scale(0.985);
+    }
+
+    .nav-icon {
+      width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* -------------------------------------------------------
+       CARDS / PANELS
+    ------------------------------------------------------- */
+
+    .portal-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.035);
+    }
+
+    /* -------------------------------------------------------
+       MOBILE OVERLAY
+    ------------------------------------------------------- */
+
+    #sidebarOverlay {
+      background: rgba(15, 23, 42, 0.38);
+      backdrop-filter: blur(2px);
+    }
+
+    /* -------------------------------------------------------
+       FORMS
+    ------------------------------------------------------- */
+
+    input,
+    textarea,
+    select {
+      background: #fff;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: #818cf8 !important;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    /* -------------------------------------------------------
+       SCROLLBARS
+    ------------------------------------------------------- */
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f8fafc;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* -------------------------------------------------------
+       MODAL
+    ------------------------------------------------------- */
+
+    #modalOverlay {
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px);
+    }
+
+    /* -------------------------------------------------------
+       TOAST
+    ------------------------------------------------------- */
+
+    #toastContainer {
+      pointer-events: none;
+    }
+
+    #toastContainer > * {
+      pointer-events: auto;
+    }
+
+    /* -------------------------------------------------------
+       ACCESSIBILITY
+    ------------------------------------------------------- */
+
+    :focus-visible {
+      outline: 3px solid rgba(99, 102, 241, 0.35);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    @media (max-width: 1023px) {
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 0.22s ease;
+        box-shadow: 12px 0 30px rgba(15, 23, 42, 0.08);
       }
 
-      #noscriptMessage {
-        display: block !important;
+      .sidebar.open {
+        transform: translateX(0);
       }
-    </style>
-  </noscript>
+    }
+  </style>
 </head>
 
 <body>
-  <!-- =====================================================
-       ACCESSIBILITY
-  ====================================================== -->
-
-  <a class="skip-link" href="#mainContent">Skip to main content</a>
-
-  <div
-    id="noscriptMessage"
-    class="noscript-message"
-    role="alert"
-    hidden
-  >
-    JavaScript is required to use Math Class. Please enable JavaScript
-    in your browser and reload this page.
-  </div>
 
   <!-- =====================================================
-       GLOBAL LOADING SCREEN
-  ====================================================== -->
-
-  <section
-    id="appLoader"
-    class="app-loader"
-    aria-label="Loading Math Class"
-    aria-live="polite"
-  >
-    <div class="loader-brand">
-      <div class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 48 48" fill="none">
-          <rect x="3" y="3" width="42" height="42" rx="13"
-                fill="currentColor" opacity=".10"/>
-          <path d="M13 32V16L24 27L35 16V32"
-                stroke="currentColor"
-                stroke-width="3.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"/>
-        </svg>
-      </div>
-
-      <div>
-        <span class="brand-name">Math Class</span>
-        <span class="brand-caption">VIRTUAL LEARNING PORTAL</span>
-      </div>
-    </div>
-
-    <div class="loader-center">
-      <div class="loader-spinner" aria-hidden="true"></div>
-      <p id="loaderMessage">Preparing your classroom...</p>
-      <span class="loader-subtext">Just a moment</span>
-    </div>
-
-    <div id="loaderRecovery" class="loader-recovery" hidden>
-      <div class="state-icon state-icon-error" aria-hidden="true">!</div>
-
-      <h2>Unable to start Math Class</h2>
-
-      <p id="loaderErrorMessage">
-        Something went wrong while starting the application.
-      </p>
-
-      <button id="loaderRetryButton" class="button button-primary" type="button">
-        Try again
-      </button>
-
-      <button id="loaderReloadButton" class="button button-ghost" type="button">
-        Reload page
-      </button>
-    </div>
-
-    <div class="loader-footer">
-      <span>MADE FOR BETTER LEARNING</span>
-      <span aria-hidden="true">·</span>
-      <span>MATHEMATICS</span>
-    </div>
-  </section>
-
-  <!-- =====================================================
-       GLOBAL NETWORK STATUS
-  ====================================================== -->
-
-  <div
-    id="networkBanner"
-    class="network-banner"
-    role="status"
-    aria-live="polite"
-    hidden
-  >
-    <span class="network-indicator" aria-hidden="true"></span>
-    <span id="networkMessage">
-      Connection lost. Reconnecting to Firebase...
-    </span>
-    <button
-      id="networkRetryButton"
-      class="network-retry"
-      type="button"
-    >
-      Retry
-    </button>
-  </div>
-
-  <!-- =====================================================
-       AUTHENTICATION APPLICATION
-  ====================================================== -->
-
-  <main id="authView" class="auth-view" hidden>
-    <div class="auth-layout">
-
-      <!-- Brand panel -->
-
-      <aside class="auth-brand-panel">
-        <a href="#login" class="auth-brand" aria-label="Math Class home">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" fill="none">
-              <path d="M12 34V14L24 26L36 14V34"
-                    stroke="currentColor"
-                    stroke-width="3.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"/>
-            </svg>
-          </span>
-
-          <span>
-            <strong>Math Class</strong>
-            <small>YOUR LEARNING SPACE</small>
-          </span>
-        </a>
-
-        <div class="auth-brand-content">
-          <span class="eyebrow">
-            <span class="eyebrow-dot"></span>
-            LEARN AT YOUR OWN PACE
-          </span>
-
-          <h1>
-            Every problem<br>
-            is a chance to<br>
-            <span>get better.</span>
-          </h1>
-
-          <p>
-            Practise consistently, ask questions freely, and see
-            your mathematics skills grow one day at a time.
-          </p>
-
-          <div class="math-decoration" aria-hidden="true">
-            <span class="math-symbol symbol-one">∑</span>
-            <span class="math-symbol symbol-two">π</span>
-            <span class="math-symbol symbol-three">√x</span>
-            <span class="math-symbol symbol-four">f(x)</span>
-            <span class="math-symbol symbol-five">∞</span>
-
-            <div class="math-equation">
-              <span>f(x)</span>
-              <span class="equation-line"></span>
-              <span>∫ x² dx</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="auth-brand-footer">
-          <span>THINK CLEARLY. SOLVE CONFIDENTLY.</span>
-          <span>01 / 03</span>
-        </div>
-      </aside>
-
-      <!-- Authentication panel -->
-
-      <section class="auth-form-panel">
-        <div class="auth-mobile-brand">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" fill="none">
-              <path d="M12 34V14L24 26L36 14V34"
-                    stroke="currentColor"
-                    stroke-width="3.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"/>
-            </svg>
-          </span>
-
-          <span>Math Class</span>
-        </div>
-
-        <!-- Login -->
-
-        <section id="loginPanel" class="auth-form-card">
-          <div class="auth-heading">
-            <span class="eyebrow">WELCOME BACK</span>
-            <h2>Let's get learning.</h2>
-            <p>Sign in to continue to your classroom.</p>
-          </div>
-
-          <form id="loginForm" novalidate>
-            <div class="form-field">
-              <label for="loginEmail">Email address</label>
-
-              <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <rect x="3" y="5" width="18" height="14" rx="3"
-                          stroke="currentColor" stroke-width="1.7"/>
-                    <path d="M4 7L12 13L20 7"
-                          stroke="currentColor" stroke-width="1.7"
-                          stroke-linecap="round"/>
-                  </svg>
-                </span>
-
-                <input
-                  id="loginEmail"
-                  name="email"
-                  type="email"
-                  autocomplete="email"
-                  placeholder="you@example.com"
-                  maxlength="254"
-                  required
-                  aria-describedby="loginEmailError"
-                >
-              </div>
-
-              <span id="loginEmailError" class="field-error"></span>
-            </div>
-
-            <div class="form-field">
-              <div class="field-label-row">
-                <label for="loginPassword">Password</label>
-
-                <button
-                  id="showLoginPassword"
-                  class="text-button"
-                  type="button"
-                  aria-pressed="false"
-                  aria-controls="loginPassword"
-                >
-                  Show
-                </button>
-              </div>
-
-              <div class="input-wrap">
-                <span class="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <rect x="4" y="10" width="16" height="11" rx="3"
-                          stroke="currentColor" stroke-width="1.7"/>
-                    <path d="M8 10V7a4 4 0 018 0v3"
-                          stroke="currentColor" stroke-width="1.7"
-                          stroke-linecap="round"/>
-                    <circle cx="12" cy="15" r="1.2" fill="currentColor"/>
-                  </svg>
-                </span>
-
-                <input
-                  id="loginPassword"
-                  name="password"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="Enter your password"
-                  required
-                  aria-describedby="loginPasswordError"
-                >
-              </div>
-
-              <span id="loginPasswordError" class="field-error"></span>
-            </div>
-
-            <div class="auth-options">
-              <label class="checkbox-label">
-                <input id="rememberSession" type="checkbox" checked>
-                <span class="custom-checkbox" aria-hidden="true"></span>
-                <span>Keep me signed in</span>
-              </label>
-
-              <button
-                id="forgotPasswordButton"
-                class="text-button"
-                type="button"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            <div
-              id="loginFormMessage"
-              class="form-message"
-              role="alert"
-              hidden
-            ></div>
-
-            <button
-              id="loginSubmitButton"
-              class="button button-primary button-full"
-              type="submit"
-            >
-              <span class="button-label">Sign in</span>
-              <span class="button-spinner" aria-hidden="true" hidden></span>
-              <svg class="button-arrow" viewBox="0 0 24 24" fill="none"
-                   aria-hidden="true">
-                <path d="M5 12H19M12 5L19 12L12 19"
-                      stroke="currentColor" stroke-width="1.8"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </form>
-
-          <div class="auth-divider">
-            <span>NEW TO MATH CLASS?</span>
-          </div>
-
-          <p class="auth-switch">
-            Don't have an account?
-            <button id="openRegisterButton" class="text-button" type="button">
-              Create account
-            </button>
-          </p>
-        </section>
-
-        <!-- Registration -->
-
-        <section id="registerPanel" class="auth-form-card" hidden>
-          <div class="auth-heading">
-            <span class="eyebrow">GET STARTED</span>
-            <h2>Create your account.</h2>
-            <p>Set up your profile and begin your learning journey.</p>
-          </div>
-
-          <form id="registerForm" novalidate>
-            <div class="form-field">
-              <label for="registerName">Full name</label>
-
-              <input
-                id="registerName"
-                name="displayName"
-                type="text"
-                autocomplete="name"
-                placeholder="Enter your full name"
-                minlength="2"
-                maxlength="80"
-                required
-                aria-describedby="registerNameError"
-              >
-
-              <span id="registerNameError" class="field-error"></span>
-            </div>
-
-            <div class="form-field">
-              <label for="registerEmail">Email address</label>
-
-              <input
-                id="registerEmail"
-                name="email"
-                type="email"
-                autocomplete="email"
-                placeholder="you@example.com"
-                maxlength="254"
-                required
-                aria-describedby="registerEmailError"
-              >
-
-              <span id="registerEmailError" class="field-error"></span>
-            </div>
-
-            <div class="form-field">
-              <label for="registerRollNumber">
-                Roll number
-                <span class="label-optional">If applicable</span>
-              </label>
-
-              <input
-                id="registerRollNumber"
-                name="rollNumber"
-                type="text"
-                placeholder="Enter your roll number"
-                maxlength="30"
-                autocomplete="off"
-              >
-            </div>
-
-            <div class="form-field">
-              <label for="registerPassword">Create password</label>
-
-              <div class="input-wrap">
-                <input
-                  id="registerPassword"
-                  name="password"
-                  type="password"
-                  autocomplete="new-password"
-                  placeholder="At least 8 characters"
-                  minlength="8"
-                  maxlength="128"
-                  required
-                  aria-describedby="registerPasswordError"
-                >
-
-                <button
-                  id="showRegisterPassword"
-                  class="input-action"
-                  type="button"
-                  aria-label="Show password"
-                  aria-pressed="false"
-                  aria-controls="registerPassword"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M2.5 12S6 5.5 12 5.5S21.5 12 21.5 12
-                             S18 18.5 12 18.5S2.5 12 2.5 12Z"
-                          stroke="currentColor" stroke-width="1.7"/>
-                    <circle cx="12" cy="12" r="3"
-                            stroke="currentColor" stroke-width="1.7"/>
-                  </svg>
-                </button>
-              </div>
-
-              <span id="registerPasswordError" class="field-error"></span>
-            </div>
-
-            <label class="checkbox-label terms-label">
-              <input id="acceptTerms" type="checkbox" required>
-              <span class="custom-checkbox" aria-hidden="true"></span>
-              <span>
-                I agree to use Math Class responsibly and follow
-                the classroom guidelines.
-              </span>
-            </label>
-
-            <div
-              id="registerFormMessage"
-              class="form-message"
-              role="alert"
-              hidden
-            ></div>
-
-            <button
-              id="registerSubmitButton"
-              class="button button-primary button-full"
-              type="submit"
-            >
-              <span class="button-label">Create account</span>
-              <span class="button-spinner" aria-hidden="true" hidden></span>
-              <svg class="button-arrow" viewBox="0 0 24 24" fill="none"
-                   aria-hidden="true">
-                <path d="M5 12H19M12 5L19 12L12 19"
-                      stroke="currentColor" stroke-width="1.8"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </form>
-
-          <p class="auth-switch">
-            Already registered?
-            <button id="openLoginButton" class="text-button" type="button">
-              Sign in
-            </button>
-          </p>
-        </section>
-
-        <!-- Password recovery -->
-
-        <section id="forgotPasswordPanel" class="auth-form-card" hidden>
-          <button
-            id="backToLoginButton"
-            class="back-button"
-            type="button"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M19 12H5M12 19L5 12L12 5"
-                    stroke="currentColor" stroke-width="1.8"
-                    stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Back to sign in
-          </button>
-
-          <div class="auth-heading">
-            <span class="eyebrow">ACCOUNT RECOVERY</span>
-            <h2>Forgot your password?</h2>
-            <p>
-              Enter your registered email address to receive
-              a password reset link.
-            </p>
-          </div>
-
-          <form id="forgotPasswordForm" novalidate>
-            <div class="form-field">
-              <label for="resetEmail">Email address</label>
-
-              <input
-                id="resetEmail"
-                name="email"
-                type="email"
-                autocomplete="email"
-                placeholder="you@example.com"
-                maxlength="254"
-                required
-              >
-            </div>
-
-            <div
-              id="forgotPasswordMessage"
-              class="form-message"
-              role="status"
-              aria-live="polite"
-              hidden
-            ></div>
-
-            <button
-              id="resetPasswordSubmitButton"
-              class="button button-primary button-full"
-              type="submit"
-            >
-              <span class="button-label">Send reset link</span>
-              <span class="button-spinner" aria-hidden="true" hidden></span>
-            </button>
-          </form>
-        </section>
-
-        <footer class="auth-form-footer">
-          <span>© <span id="currentYear">2026</span> Math Class</span>
-          <span class="footer-dot" aria-hidden="true">·</span>
-          <span>LEARN. PRACTISE. IMPROVE.</span>
-        </footer>
-      </section>
-    </div>
-  </main>
-
-  <!-- =====================================================
-       AUTHENTICATED APPLICATION SHELL
-  ====================================================== -->
-
-  <div id="appShell" class="app-shell" hidden>
-
-    <!-- Mobile sidebar scrim -->
-
-    <button
-      id="sidebarScrim"
-      class="sidebar-scrim"
-      type="button"
-      aria-label="Close navigation menu"
-      tabindex="-1"
-      hidden
-    ></button>
-
-    <!-- Sidebar -->
-
-    <aside id="appSidebar" class="app-sidebar" aria-label="Main navigation">
-      <a href="#dashboard" class="sidebar-brand" data-route="dashboard">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 48 48" fill="none">
-            <path d="M12 34V14L24 26L36 14V34"
-                  stroke="currentColor"
-                  stroke-width="3.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"/>
-          </svg>
-        </span>
-
-        <span class="sidebar-brand-text">
-          <strong>Math Class</strong>
-          <small>LEARNING PORTAL</small>
-        </span>
-      </a>
-
-      <div class="sidebar-workspace">
-        <span class="workspace-icon" aria-hidden="true">M</span>
-
-        <span class="workspace-info">
-          <strong>My Classroom</strong>
-          <small id="sidebarRoleLabel">Student workspace</small>
-        </span>
-
-        <span class="workspace-status" aria-label="Workspace active"></span>
-      </div>
-
-      <!-- Populated according to the authenticated role -->
-
-      <nav id="sidebarNavigation" class="sidebar-navigation">
-        <span class="nav-section-label">WORKSPACE</span>
-
-        <a
-          class="nav-link"
-          href="#dashboard"
-          data-route="dashboard"
-          data-nav-item
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3" y="3" width="8" height="8" rx="2"
-                  stroke="currentColor" stroke-width="1.7"/>
-            <rect x="13" y="3" width="8" height="5" rx="2"
-                  stroke="currentColor" stroke-width="1.7"/>
-            <rect x="13" y="10" width="8" height="11" rx="2"
-                  stroke="currentColor" stroke-width="1.7"/>
-            <rect x="3" y="13" width="8" height="8" rx="2"
-                  stroke="currentColor" stroke-width="1.7"/>
-          </svg>
-          <span>Overview</span>
-          <span class="nav-active-indicator" aria-hidden="true"></span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#announcements"
-          data-route="announcements"
-          data-nav-item
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 14V10A2 2 0 016 8H9L17 4V20L9 16H6A2 2 0 014 14Z"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linejoin="round"/>
-            <path d="M9 16L11 21H7L5 16M20 9L22 12L20 15"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Notice board</span>
-          <span id="announcementNavBadge" class="nav-badge" hidden>0</span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#study-tracker"
-          data-route="study-tracker"
-          data-nav-item
-          data-role="student"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="4" y="4" width="16" height="17" rx="3"
-                  stroke="currentColor" stroke-width="1.7"/>
-            <path d="M8 2V6M16 2V6M4 9H20M8 13L10 15L14 11"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Daily practice</span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#study-history"
-          data-route="study-history"
-          data-nav-item
-          data-role="student"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M3 12A9 9 0 1112 21"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round"/>
-            <path d="M3 5V12H10M12 7V12L15 14"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Study history</span>
-        </a>
-
-        <div class="sidebar-divider"></div>
-        <span class="nav-section-label">COMMUNITY</span>
-
-        <a
-          class="nav-link"
-          href="#class-chat"
-          data-route="class-chat"
-          data-nav-item
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M20 11.5A7.5 7.5 0 0112.5 19H6L3 21V11.5
-                     A7.5 7.5 0 0110.5 4H12.5A7.5 7.5 0 0120 11.5Z"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linejoin="round"/>
-            <path d="M8 11H15M8 14H12"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round"/>
-          </svg>
-          <span>Class chat</span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#doubts"
-          data-route="doubts"
-          data-nav-item
-          data-role="student"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"
-                    stroke="currentColor" stroke-width="1.7"/>
-            <path d="M9.5 9A2.6 2.6 0 0114 7.5
-                     C15.5 8.5 15.5 10 14 11L12 13V14"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="17" r="1" fill="currentColor"/>
-          </svg>
-          <span>Ask a doubt</span>
-          <span id="doubtNavBadge" class="nav-badge" hidden>0</span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#doubt-inbox"
-          data-route="doubt-inbox"
-          data-nav-item
-          data-role="teacher"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 5H20V19H4V5Z"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linejoin="round"/>
-            <path d="M4 7L12 13L20 7"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Doubt inbox</span>
-          <span id="teacherDoubtBadge" class="nav-badge" hidden>0</span>
-        </a>
-
-        <div class="sidebar-divider" data-role="teacher"></div>
-        <span class="nav-section-label" data-role="teacher">TEACHING</span>
-
-        <a
-          class="nav-link"
-          href="#verification"
-          data-route="verification"
-          data-nav-item
-          data-role="teacher"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 4H20V20H4V4Z"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linejoin="round"/>
-            <path d="M8 12L11 15L17 9"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Verification queue</span>
-          <span id="verificationNavBadge" class="nav-badge" hidden>0</span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#student-insights"
-          data-route="student-insights"
-          data-nav-item
-          data-role="teacher"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 20V12M10 20V5M16 20V9M22 20V3"
-                  stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round"/>
-          </svg>
-          <span>Student insights</span>
-        </a>
-
-        <div class="sidebar-divider" data-role="admin"></div>
-        <span class="nav-section-label" data-role="admin">ADMINISTRATION</span>
-
-        <a
-          class="nav-link"
-          href="#role-manager"
-          data-route="role-manager"
-          data-nav-item
-          data-role="admin"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="9" cy="8" r="4"
-                    stroke="currentColor" stroke-width="1.7"/>
-            <path d="M2 20V18A5 5 0 017 13H11A5 5 0 0116 18V20M17 8H22M19.5 5.5V10.5"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Role manager</span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#moderation"
-          data-route="moderation"
-          data-nav-item
-          data-role="admin"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 3L20 6V11C20 16 16.5 19.5 12 21
-                     C7.5 19.5 4 16 4 11V6L12 3Z"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linejoin="round"/>
-            <path d="M9 12L11 14L15.5 9.5"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Chat moderation</span>
-        </a>
-
-        <a
-          class="nav-link"
-          href="#system-status"
-          data-route="system-status"
-          data-nav-item
-          data-role="admin"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="3"
-                  stroke="currentColor" stroke-width="1.7"/>
-            <path d="M7 15L10 11L13 13L17 8"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>System status</span>
-        </a>
-      </nav>
-
-      <div class="sidebar-bottom">
-        <a
-          class="nav-link"
-          href="#profile"
-          data-route="profile"
-          data-nav-item
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="8" r="4"
-                    stroke="currentColor" stroke-width="1.7"/>
-            <path d="M4 21V19A6 6 0 0110 13H14A6 6 0 0120 19V21"
-                  stroke="currentColor" stroke-width="1.7"
-                  stroke-linecap="round"/>
-          </svg>
-          <span>My profile</span>
-        </a>
-
-        <div class="sidebar-user">
-          <div id="sidebarAvatar" class="avatar avatar-small" aria-hidden="true">
-            M
-          </div>
-
-          <div class="sidebar-user-info">
-            <strong id="sidebarUserName">Loading profile...</strong>
-            <span id="sidebarUserEmail">Please wait</span>
-          </div>
-
-          <button
-            id="sidebarLogoutButton"
-            class="icon-button sidebar-logout"
-            type="button"
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M10 17L15 12L10 7M15 12H3M14 3H19A2 2 0 0121 5V19A2 2 0 0119 21H14"
-                    stroke="currentColor" stroke-width="1.8"
-                    stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Main application content -->
-
-    <div class="app-main">
-      <header class="app-topbar">
-        <div class="topbar-left">
-          <button
-            id="mobileMenuButton"
-            class="icon-button mobile-menu-button"
-            type="button"
-            aria-label="Open navigation menu"
-            aria-expanded="false"
-            aria-controls="appSidebar"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 7H20M4 12H20M4 17H20"
-                    stroke="currentColor" stroke-width="1.8"
-                    stroke-linecap="round"/>
-            </svg>
-          </button>
-
-          <div class="breadcrumb">
-            <span>Math Class</span>
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 5L16 12L9 19"
-                    stroke="currentColor" stroke-width="1.8"
-                    stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <strong id="currentPageTitle">Overview</strong>
-          </div>
-        </div>
-
-        <div class="topbar-actions">
-          <span id="connectionStatus" class="connection-status">
-            <span class="connection-dot" aria-hidden="true"></span>
-            <span id="connectionStatusText">Connecting...</span>
-          </span>
-
-          <button
-            id="topbarProfileButton"
-            class="topbar-profile-button"
-            type="button"
-            aria-label="Open profile"
-          >
-            <span id="topbarAvatar" class="avatar avatar-small">M</span>
-            <span class="topbar-profile-copy">
-              <strong id="topbarUserName">My account</strong>
-              <small id="topbarUserRole">Student</small>
-            </span>
-
-            <svg class="profile-chevron" viewBox="0 0 24 24" fill="none"
-                 aria-hidden="true">
-              <path d="M7 10L12 15L17 10"
-                    stroke="currentColor" stroke-width="1.8"
-                    stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      <main id="mainContent" class="main-content" tabindex="-1">
-        <div id="pageLoadingState" class="page-loading-state" hidden>
-          <div class="skeleton skeleton-heading"></div>
-          <div class="skeleton skeleton-subheading"></div>
-
-          <div class="skeleton-grid">
-            <div class="skeleton skeleton-card"></div>
-            <div class="skeleton skeleton-card"></div>
-            <div class="skeleton skeleton-card"></div>
-          </div>
-
-          <div class="skeleton skeleton-panel"></div>
-        </div>
-
-        <section
-          id="pageErrorState"
-          class="page-state-card"
-          role="alert"
-          hidden
-        >
-          <div class="state-icon state-icon-error" aria-hidden="true">!</div>
-          <h2>This page couldn't load</h2>
-          <p id="pageErrorMessage">
-            Please check your connection and try again.
-          </p>
-          <button id="pageRetryButton" class="button button-primary" type="button">
-            Try again
-          </button>
-        </section>
-
-        <section
-          id="pageNotFoundState"
-          class="page-state-card"
-          hidden
-        >
-          <div class="state-icon" aria-hidden="true">404</div>
-          <h2>Page not found</h2>
-          <p>The page you're looking for doesn't exist or isn't available.</p>
-          <a class="button button-primary" href="#dashboard" data-route="dashboard">
-            Return to overview
-          </a>
-        </section>
-
-        <!-- Role-specific modules mount their page content here. -->
-
-        <div id="pageContent" class="page-content" aria-live="polite"></div>
-      </main>
-
-      <footer class="app-footer">
-        <span>Math Class</span>
-        <span class="footer-dot" aria-hidden="true">·</span>
-        <span>Built for consistent learning</span>
-        <span class="footer-spacer"></span>
-        <span id="appVersionLabel">Version 1.0</span>
-      </footer>
-    </div>
-  </div>
-
-  <!-- =====================================================
-       GLOBAL TOAST NOTIFICATIONS
+       TOAST CONTAINER
   ====================================================== -->
 
   <div
     id="toastContainer"
-    class="toast-container"
     aria-live="polite"
-    aria-atomic="false"
+    aria-atomic="true"
+    class="fixed top-4 left-4 right-4 sm:left-auto sm:right-5 sm:w-96 z-[110]"
   ></div>
+
+
+  <!-- =====================================================
+       GLOBAL LOADER
+  ====================================================== -->
+
+  <div
+    id="appLoader"
+    class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center px-6"
+  >
+    <div class="loader" aria-hidden="true"></div>
+
+    <p
+      id="loaderText"
+      class="mt-4 text-sm font-medium text-slate-500 text-center"
+    >
+      Connecting to your classroom…
+    </p>
+
+    <button
+      id="loaderRetry"
+      type="button"
+      class="hidden mt-4 text-sm font-bold text-indigo-600 underline"
+    >
+      Retry connection
+    </button>
+  </div>
+
+
+  <!-- =====================================================
+       AUTH VIEW
+  ====================================================== -->
+
+  <section
+    id="authView"
+    class="hidden min-h-screen bg-slate-50"
+  >
+
+    <div class="min-h-screen grid lg:grid-cols-2">
+
+      <!-- LEFT PANEL -->
+
+      <div
+        class="hidden lg:flex bg-indigo-600 text-white p-12 xl:p-16 flex-col justify-between"
+      >
+
+        <div>
+          <div class="text-2xl font-black tracking-tight">
+            ∑ Math Class
+          </div>
+
+          <div class="mt-3 text-indigo-200 text-sm">
+            Virtual Classroom
+          </div>
+        </div>
+
+
+        <div class="max-w-xl">
+
+          <div
+            class="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-4 py-2 text-sm font-semibold"
+          >
+            Digital Mathematics Classroom
+          </div>
+
+          <h1
+            class="mt-7 text-5xl xl:text-6xl font-black leading-[1.05] tracking-tight"
+          >
+            Mathematics
+            <br>
+            made simpler.
+          </h1>
+
+          <p
+            class="mt-6 text-indigo-100 text-lg leading-8 max-w-lg"
+          >
+            Announcements, daily practice, classroom discussion
+            and private doubt solving — all in one place.
+          </p>
+
+          <div class="mt-8 grid grid-cols-2 gap-3 max-w-lg">
+
+            <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
+              <div class="text-xl font-black">01</div>
+              <div class="mt-1 text-sm text-indigo-100">
+                Practice
+              </div>
+            </div>
+
+            <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
+              <div class="text-xl font-black">02</div>
+              <div class="mt-1 text-sm text-indigo-100">
+                Discuss
+              </div>
+            </div>
+
+            <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
+              <div class="text-xl font-black">03</div>
+              <div class="mt-1 text-sm text-indigo-100">
+                Ask doubts
+              </div>
+            </div>
+
+            <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
+              <div class="text-xl font-black">04</div>
+              <div class="mt-1 text-sm text-indigo-100">
+                Improve
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <p class="text-sm text-indigo-200">
+          Secure classroom access
+        </p>
+
+      </div>
+
+
+      <!-- AUTH FORM -->
+
+      <div class="flex items-center justify-center p-5 sm:p-8 lg:p-12">
+
+        <div class="w-full max-w-md">
+
+          <div class="lg:hidden mb-8">
+
+            <div class="text-2xl font-black text-indigo-600">
+              ∑ Math Class
+            </div>
+
+            <p class="text-sm text-slate-500 mt-1">
+              Virtual Classroom
+            </p>
+
+          </div>
+
+
+          <div class="portal-card p-6 sm:p-8">
+
+            <div
+              id="authModeBadge"
+              class="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-3 py-1 text-xs font-bold"
+            >
+              STUDENT PORTAL
+            </div>
+
+
+            <h2
+              id="authTitle"
+              class="text-3xl font-black tracking-tight mt-5"
+            >
+              Welcome back
+            </h2>
+
+
+            <p
+              id="authSub"
+              class="text-slate-500 mt-2 leading-6"
+            >
+              Sign in to continue to your classroom.
+            </p>
+
+
+            <!-- AUTH ERROR -->
+
+            <div
+              id="authError"
+              class="hidden mt-5 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm"
+              role="alert"
+            ></div>
+
+
+            <!-- AUTH FORM -->
+
+            <form
+              id="authForm"
+              class="mt-7 space-y-5"
+              novalidate
+            >
+
+              <div>
+
+                <label
+                  for="email"
+                  class="block text-sm font-semibold text-slate-700 mb-2"
+                >
+                  Email address
+                </label>
+
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  inputmode="email"
+                  required
+                  maxlength="254"
+                  class="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800"
+                  placeholder="you@example.com"
+                >
+
+              </div>
+
+
+              <div>
+
+                <div class="flex items-center justify-between gap-3 mb-2">
+
+                  <label
+                    for="password"
+                    class="block text-sm font-semibold text-slate-700"
+                  >
+                    Password
+                  </label>
+
+                  <button
+                    id="forgotPassword"
+                    type="button"
+                    class="text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                  >
+                    Forgot password?
+                  </button>
+
+                </div>
+
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  minlength="6"
+                  maxlength="128"
+                  required
+                  class="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800"
+                  placeholder="At least 6 characters"
+                >
+
+              </div>
+
+
+              <!-- CONFIRM PASSWORD -->
+
+              <div
+                id="confirmPasswordGroup"
+                class="hidden"
+              >
+
+                <label
+                  for="confirmPassword"
+                  class="block text-sm font-semibold text-slate-700 mb-2"
+                >
+                  Confirm password
+                </label>
+
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  minlength="6"
+                  maxlength="128"
+                  class="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800"
+                  placeholder="Enter password again"
+                >
+
+              </div>
+
+
+              <!-- DISPLAY NAME -->
+
+              <div
+                id="displayNameGroup"
+                class="hidden"
+              >
+
+                <label
+                  for="displayName"
+                  class="block text-sm font-semibold text-slate-700 mb-2"
+                >
+                  Your name
+                </label>
+
+                <input
+                  id="displayName"
+                  name="displayName"
+                  type="text"
+                  autocomplete="name"
+                  maxlength="80"
+                  class="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800"
+                  placeholder="Your full name"
+                >
+
+              </div>
+
+
+              <button
+                id="authSubmit"
+                type="submit"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl py-3.5 transition"
+              >
+                Sign in
+              </button>
+
+            </form>
+
+
+            <!-- AUTH MODE TOGGLE -->
+
+            <div class="mt-6 text-sm text-center text-slate-500">
+
+              <span id="authToggleText">
+                New to the class?
+              </span>
+
+              <button
+                id="authToggle"
+                type="button"
+                class="text-indigo-600 font-bold hover:text-indigo-700 ml-1"
+              >
+                Create account
+              </button>
+
+            </div>
+
+
+            <p
+              id="authHelpText"
+              class="text-xs text-slate-400 mt-6 leading-5 text-center"
+            >
+              Use the account assigned to you by your class administrator.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- =====================================================
+       APPLICATION SHELL
+  ====================================================== -->
+
+  <div
+    id="appShell"
+    class="hidden min-h-screen bg-slate-50"
+  >
+
+    <!-- MOBILE SIDEBAR OVERLAY -->
+
+    <button
+      id="sidebarOverlay"
+      type="button"
+      aria-label="Close navigation"
+      class="hidden fixed inset-0 z-40 lg:hidden"
+    ></button>
+
+
+    <!-- ===================================================
+         SIDEBAR
+    ==================================================== -->
+
+    <aside
+      id="sidebar"
+      class="sidebar bg-white border-r border-slate-200 flex flex-col"
+    >
+
+      <!-- BRAND -->
+
+      <div class="p-5 border-b border-slate-100">
+
+        <div class="flex items-center justify-between">
+
+          <div>
+            <div class="text-xl font-black text-indigo-600">
+              ∑ Math Class
+            </div>
+
+            <p class="text-xs text-slate-400 mt-1">
+              Your digital classroom
+            </p>
+          </div>
+
+          <button
+            id="mobileSidebarClose"
+            type="button"
+            class="lg:hidden w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-500"
+            aria-label="Close navigation"
+          >
+            ×
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- PROFILE -->
+
+      <div class="p-4">
+
+        <button
+          id="sidebarProfileButton"
+          type="button"
+          class="w-full bg-indigo-50 rounded-2xl p-4 text-left hover:bg-indigo-100 transition"
+        >
+
+          <div
+            id="sideAvatar"
+            class="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg"
+          >
+            M
+          </div>
+
+          <p
+            id="sideName"
+            class="font-bold mt-3 truncate text-slate-800"
+          >
+            Loading…
+          </p>
+
+          <p
+            id="sideRole"
+            class="text-xs text-slate-500 mt-1"
+          >
+            Member
+          </p>
+
+        </button>
+
+      </div>
+
+
+      <!-- NAVIGATION -->
+
+      <nav
+        id="mainNavigation"
+        class="px-3 pb-4 space-y-1 overflow-y-auto flex-1"
+        aria-label="Main navigation"
+      >
+
+        <!-- STUDENT / GENERAL -->
+
+        <div
+          class="nav-section"
+          data-nav-section="student"
+        >
+
+          <p class="px-3 pt-2 pb-2 text-[10px] font-black tracking-widest text-slate-400 uppercase">
+            Classroom
+          </p>
+
+
+          <button
+            class="nav-button"
+            data-tab="dashboard"
+            type="button"
+          >
+            <span class="nav-icon">⌂</span>
+            <span>Dashboard</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="notices"
+            type="button"
+          >
+            <span class="nav-icon">◉</span>
+            <span>Announcements</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="study-tracker"
+            type="button"
+          >
+            <span class="nav-icon">✓</span>
+            <span>Study Tracker</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="study-history"
+            type="button"
+          >
+            <span class="nav-icon">◷</span>
+            <span>Study History</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="class-chat"
+            type="button"
+          >
+            <span class="nav-icon">☵</span>
+            <span>Class Chat</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="doubts"
+            type="button"
+          >
+            <span class="nav-icon">?</span>
+            <span>My Doubts</span>
+          </button>
+
+        </div>
+
+
+        <!-- TEACHER -->
+
+        <div
+          class="nav-section hidden"
+          data-nav-section="teacher"
+        >
+
+          <p class="px-3 pt-5 pb-2 text-[10px] font-black tracking-widest text-slate-400 uppercase">
+            Teaching
+          </p>
+
+
+          <button
+            class="nav-button"
+            data-tab="teacher-dashboard"
+            type="button"
+          >
+            <span class="nav-icon">▦</span>
+            <span>Teacher Dashboard</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="practice-review"
+            type="button"
+          >
+            <span class="nav-icon">✓</span>
+            <span>Practice Review</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="teacher-announcements"
+            type="button"
+          >
+            <span class="nav-icon">◉</span>
+            <span>Announcements</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="doubt-inbox"
+            type="button"
+          >
+            <span class="nav-icon">?</span>
+            <span>Doubt Inbox</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="students"
+            type="button"
+          >
+            <span class="nav-icon">♙</span>
+            <span>Students</span>
+          </button>
+
+        </div>
+
+
+        <!-- ADMIN -->
+
+        <div
+          class="nav-section hidden"
+          data-nav-section="admin"
+        >
+
+          <p class="px-3 pt-5 pb-2 text-[10px] font-black tracking-widest text-slate-400 uppercase">
+            Administration
+          </p>
+
+
+          <button
+            class="nav-button"
+            data-tab="admin-dashboard"
+            type="button"
+          >
+            <span class="nav-icon">▦</span>
+            <span>Admin Dashboard</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="admin-users"
+            type="button"
+          >
+            <span class="nav-icon">♙</span>
+            <span>User Management</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="admin-moderation"
+            type="button"
+          >
+            <span class="nav-icon">◈</span>
+            <span>Chat Moderation</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="admin-announcements"
+            type="button"
+          >
+            <span class="nav-icon">◉</span>
+            <span>Announcements</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="admin-audit"
+            type="button"
+          >
+            <span class="nav-icon">▤</span>
+            <span>Audit Logs</span>
+          </button>
+
+
+          <button
+            class="nav-button"
+            data-tab="admin-system"
+            type="button"
+          >
+            <span class="nav-icon">⚙</span>
+            <span>System</span>
+          </button>
+
+        </div>
+
+      </nav>
+
+
+      <!-- SIDEBAR FOOTER -->
+
+      <div class="p-3 border-t border-slate-100">
+
+        <button
+          id="sidebarProfile"
+          type="button"
+          class="nav-button"
+          data-tab="profile"
+        >
+          <span class="nav-icon">●</span>
+          <span>My Profile</span>
+        </button>
+
+
+        <button
+          id="logoutButton"
+          type="button"
+          class="nav-button text-red-500 hover:text-red-600 hover:bg-red-50"
+        >
+          <span class="nav-icon">↪</span>
+          <span>Sign out</span>
+        </button>
+
+      </div>
+
+    </aside>
+
+
+    <!-- ===================================================
+         MAIN
+    ==================================================== -->
+
+    <main
+      id="mainContent"
+      class="lg:ml-[280px] min-h-screen"
+    >
+
+      <!-- TOP BAR -->
+
+      <header
+        id="topBar"
+        class="sticky top-0 z-30 h-20 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8"
+      >
+
+        <div class="flex items-center gap-3">
+
+          <button
+            id="mobileMenuButton"
+            type="button"
+            class="lg:hidden w-10 h-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center"
+            aria-label="Open navigation"
+            aria-expanded="false"
+          >
+            ☰
+          </button>
+
+
+          <div>
+
+            <p
+              id="topBarEyebrow"
+              class="hidden sm:block text-[10px] font-black tracking-widest text-slate-400 uppercase"
+            >
+              MATH CLASS
+            </p>
+
+            <h1
+              id="pageTitle"
+              class="font-black text-lg sm:text-xl text-slate-900"
+            >
+              Dashboard
+            </h1>
+
+          </div>
+
+        </div>
+
+
+        <div class="flex items-center gap-2 sm:gap-3">
+
+          <div
+            id="connectionStatus"
+            class="hidden sm:flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-bold"
+          >
+            <span
+              class="w-2 h-2 rounded-full bg-emerald-500"
+              aria-hidden="true"
+            ></span>
+
+            Connected
+          </div>
+
+
+          <button
+            id="topProfileButton"
+            type="button"
+            class="w-10 h-10 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center"
+            aria-label="Open profile"
+          >
+            M
+          </button>
+
+        </div>
+
+      </header>
+
+
+      <!-- PAGE -->
+
+      <div
+        id="pageContent"
+        class="p-4 sm:p-6 lg:p-8"
+      >
+        <div
+          class="min-h-[50vh] flex items-center justify-center"
+        >
+          <div class="text-center">
+
+            <div
+              class="loader mx-auto"
+              aria-hidden="true"
+            ></div>
+
+            <p class="mt-4 text-sm text-slate-500">
+              Loading classroom…
+            </p>
+
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
 
   <!-- =====================================================
        GLOBAL MODAL
@@ -1012,167 +1100,458 @@
 
   <div
     id="modalOverlay"
-    class="modal-overlay"
-    hidden
+    class="hidden fixed inset-0 z-[120] items-center justify-center p-4"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
   >
-    <section
-      id="globalModal"
-      class="modal-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modalTitle"
-      aria-describedby="modalDescription"
-      tabindex="-1"
-    >
-      <div class="modal-header">
-        <div>
-          <span id="modalEyebrow" class="eyebrow">MATH CLASS</span>
-          <h2 id="modalTitle">Confirm action</h2>
-        </div>
-
-        <button
-          id="modalCloseButton"
-          class="icon-button"
-          type="button"
-          aria-label="Close dialog"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M6 6L18 18M18 6L6 18"
-                  stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
-
-      <div id="modalBody" class="modal-body">
-        <p id="modalDescription">Are you sure you want to continue?</p>
-      </div>
-
-      <div id="modalFooter" class="modal-footer">
-        <button
-          id="modalCancelButton"
-          class="button button-secondary"
-          type="button"
-        >
-          Cancel
-        </button>
-
-        <button
-          id="modalConfirmButton"
-          class="button button-primary"
-          type="button"
-        >
-          Confirm
-        </button>
-      </div>
-    </section>
+    <div
+      id="modalContent"
+      class="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl"
+    ></div>
   </div>
 
+
   <!-- =====================================================
-       IMAGE LIGHTBOX
+       CONNECTION / ERROR RECOVERY
   ====================================================== -->
 
-  <div id="lightboxOverlay" class="lightbox-overlay" hidden>
-    <button
-      id="lightboxCloseButton"
-      class="icon-button lightbox-close"
-      type="button"
-      aria-label="Close image preview"
-    >
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M6 6L18 18M18 6L6 18"
-              stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round"/>
-      </svg>
-    </button>
+  <div
+    id="fatalErrorView"
+    class="hidden fixed inset-0 z-[200] bg-slate-50 items-center justify-center p-5"
+  >
 
-    <img id="lightboxImage" src="" alt="Expanded study proof image">
+    <div class="w-full max-w-md portal-card p-7 text-center">
 
-    <p id="lightboxCaption" class="lightbox-caption"></p>
+      <div
+        class="w-14 h-14 rounded-2xl bg-red-50 text-red-600 mx-auto flex items-center justify-center text-2xl"
+      >
+        !
+      </div>
+
+      <h2
+        class="text-2xl font-black mt-5"
+      >
+        Something went wrong
+      </h2>
+
+      <p
+        id="fatalErrorMessage"
+        class="text-slate-500 mt-2 leading-6"
+      >
+        The classroom could not be loaded.
+      </p>
+
+      <div class="mt-6 flex flex-col sm:flex-row gap-3">
+
+        <button
+          id="fatalRetry"
+          type="button"
+          class="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3"
+        >
+          Try again
+        </button>
+
+        <button
+          id="fatalReload"
+          type="button"
+          class="flex-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 font-bold py-3"
+        >
+          Reload page
+        </button>
+
+      </div>
+
+    </div>
+
   </div>
 
+
   <!-- =====================================================
-       JAVASCRIPT ENTRY POINT
-       app.js will initialize Firebase and manage the SPA.
+       APP ENTRY
+  ====================================================== -->
+
+  <script type="module" src="./app.js"></script>
+
+
+  <!-- =====================================================
+       SMALL SHELL-LEVEL UI CONTROLLER
   ====================================================== -->
 
   <script>
-    /*
-     * Emergency loader safeguard:
-     * The loader must never cover the page indefinitely if an
-     * application module fails to load or initialize.
-     *
-     * This timer is intentionally independent of app.js.
-     */
     (() => {
-      const loader = document.getElementById("appLoader");
-      const recovery = document.getElementById("loaderRecovery");
-      const loaderMessage = document.getElementById("loaderMessage");
-      const loaderError = document.getElementById("loaderErrorMessage");
-      const retryButton = document.getElementById("loaderRetryButton");
-      const reloadButton = document.getElementById("loaderReloadButton");
+      "use strict";
 
-      let appStarted = false;
-      let recoveryTimer = null;
+      const sidebar =
+        document.getElementById("sidebar");
 
-      window.MathClassBoot = {
-        markStarted() {
-          appStarted = true;
-          clearTimeout(recoveryTimer);
-        },
+      const overlay =
+        document.getElementById("sidebarOverlay");
 
-        showRecovery(message) {
-          if (appStarted) return;
+      const menuButton =
+        document.getElementById("mobileMenuButton");
 
-          if (loaderMessage) loaderMessage.hidden = true;
-          if (recovery) recovery.hidden = false;
+      const closeButton =
+        document.getElementById("mobileSidebarClose");
 
-          if (loaderError && message) {
-            loaderError.textContent = message;
+
+      function openSidebar() {
+        if (!sidebar) return;
+
+        sidebar.classList.add("open");
+
+        if (overlay) {
+          overlay.classList.remove("hidden");
+        }
+
+        if (menuButton) {
+          menuButton.setAttribute(
+            "aria-expanded",
+            "true"
+          );
+        }
+
+        document.body.style.overflow = "hidden";
+      }
+
+
+      function closeSidebar() {
+        if (!sidebar) return;
+
+        sidebar.classList.remove("open");
+
+        if (overlay) {
+          overlay.classList.add("hidden");
+        }
+
+        if (menuButton) {
+          menuButton.setAttribute(
+            "aria-expanded",
+            "false"
+          );
+        }
+
+        document.body.style.overflow = "";
+      }
+
+
+      menuButton?.addEventListener(
+        "click",
+        openSidebar
+      );
+
+
+      closeButton?.addEventListener(
+        "click",
+        closeSidebar
+      );
+
+
+      overlay?.addEventListener(
+        "click",
+        closeSidebar
+      );
+
+
+      document.addEventListener(
+        "click",
+        event => {
+          const button =
+            event.target.closest(
+              "[data-tab]"
+            );
+
+          if (!button) return;
+
+          if (
+            window.innerWidth < 1024
+          ) {
+            closeSidebar();
           }
         }
-      };
+      );
 
-      recoveryTimer = window.setTimeout(() => {
-        if (appStarted) return;
 
-        window.MathClassBoot.showRecovery(
-          "The application is taking longer than expected to start. " +
-          "Check your internet connection, then retry."
+      window.addEventListener(
+        "resize",
+        () => {
+          if (window.innerWidth >= 1024) {
+            closeSidebar();
+          }
+        }
+      );
+
+
+      window.addEventListener(
+        "keydown",
+        event => {
+          if (
+            event.key === "Escape" &&
+            sidebar?.classList.contains("open")
+          ) {
+            closeSidebar();
+          }
+        }
+      );
+
+
+      /*
+       * Global modal close support.
+       */
+      document.addEventListener(
+        "click",
+        event => {
+          const close =
+            event.target.closest(
+              "[data-modal-close]"
+            );
+
+          if (!close) return;
+
+          const modal =
+            document.getElementById(
+              "modalOverlay"
+            );
+
+          if (!modal) return;
+
+          modal.classList.add("hidden");
+          modal.classList.remove("flex");
+          modal.setAttribute(
+            "aria-hidden",
+            "true"
+          );
+
+          const content =
+            document.getElementById(
+              "modalContent"
+            );
+
+          if (content) {
+            content.innerHTML = "";
+          }
+        }
+      );
+
+
+      /*
+       * Clicking outside the modal content closes it.
+       */
+      document
+        .getElementById("modalOverlay")
+        ?.addEventListener(
+          "click",
+          event => {
+            if (
+              event.target.id ===
+              "modalOverlay"
+            ) {
+              event.currentTarget.classList.add(
+                "hidden"
+              );
+
+              event.currentTarget.classList.remove(
+                "flex"
+              );
+
+              event.currentTarget.setAttribute(
+                "aria-hidden",
+                "true"
+              );
+
+              const content =
+                document.getElementById(
+                  "modalContent"
+                );
+
+              if (content) {
+                content.innerHTML = "";
+              }
+            }
+          }
         );
-      }, 12000);
 
-      retryButton?.addEventListener("click", () => {
-        window.location.reload();
-      });
 
-      reloadButton?.addEventListener("click", () => {
-        window.location.reload();
-      });
+      /*
+       * Keep the page from retaining a stale
+       * loading state if app.js reports a fatal error.
+       */
+      window.addEventListener(
+        "mathclass:fatal",
+        event => {
+          const loader =
+            document.getElementById(
+              "appLoader"
+            );
 
-      document.getElementById("currentYear").textContent =
-        String(new Date().getFullYear());
+          const fatal =
+            document.getElementById(
+              "fatalErrorView"
+            );
 
-      window.addEventListener("error", (event) => {
-        if (appStarted) return;
+          const message =
+            document.getElementById(
+              "fatalErrorMessage"
+            );
 
-        window.MathClassBoot.showRecovery(
-          "A script failed to load. " +
-          "Check that all application files are present, then retry."
+          if (loader) {
+            loader.classList.add(
+              "hidden"
+            );
+          }
+
+          if (fatal) {
+            fatal.classList.remove(
+              "hidden"
+            );
+
+            fatal.classList.add(
+              "flex"
+            );
+          }
+
+          if (
+            message &&
+            event.detail?.message
+          ) {
+            message.textContent =
+              event.detail.message;
+          }
+        }
+      );
+
+
+      document
+        .getElementById("fatalRetry")
+        ?.addEventListener(
+          "click",
+          () => {
+            window.dispatchEvent(
+              new CustomEvent(
+                "mathclass:retry"
+              )
+            );
+          }
         );
-      });
 
-      window.addEventListener("unhandledrejection", () => {
-        if (appStarted) return;
 
-        window.MathClassBoot.showRecovery(
-          "The application could not finish initializing. " +
-          "Check your connection and try again."
+      document
+        .getElementById("fatalReload")
+        ?.addEventListener(
+          "click",
+          () => {
+            window.location.reload();
+          }
         );
-      });
+
+
+      /*
+       * Connection indicator.
+       * app.js can dispatch:
+       * mathclass:connection
+       * { detail: { connected: true/false } }
+       */
+      window.addEventListener(
+        "mathclass:connection",
+        event => {
+          const indicator =
+            document.getElementById(
+              "connectionStatus"
+            );
+
+          if (!indicator) return;
+
+          const connected =
+            event.detail?.connected !== false;
+
+          if (connected) {
+            indicator.className =
+              "hidden sm:flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-bold";
+
+            indicator.innerHTML = `
+              <span
+                class="w-2 h-2 rounded-full bg-emerald-500"
+                aria-hidden="true"
+              ></span>
+              Connected
+            `;
+          } else {
+            indicator.className =
+              "hidden sm:flex items-center gap-2 rounded-full bg-amber-50 text-amber-700 px-3 py-1.5 text-xs font-bold";
+
+            indicator.innerHTML = `
+              <span
+                class="w-2 h-2 rounded-full bg-amber-500"
+                aria-hidden="true"
+              ></span>
+              Offline
+            `;
+          }
+        }
+      );
+
+
+      /*
+       * Page title synchronization.
+       */
+      window.addEventListener(
+        "mathclass:pagechange",
+        event => {
+          const title =
+            document.getElementById(
+              "pageTitle"
+            );
+
+          if (!title) return;
+
+          const titles = {
+            dashboard: "Dashboard",
+            notices: "Announcements",
+            "study-tracker": "Study Tracker",
+            tracker: "Study Tracker",
+            "study-history": "Study History",
+            history: "Study History",
+            "class-chat": "Class Chat",
+            chat: "Class Chat",
+            doubts: "My Doubts",
+            "doubt-inbox": "Doubt Inbox",
+
+            "teacher-dashboard":
+              "Teacher Dashboard",
+            "practice-review":
+              "Practice Review",
+            "teacher-announcements":
+              "Announcements",
+            students: "Students",
+
+            "admin-dashboard":
+              "Admin Dashboard",
+            "admin-users":
+              "User Management",
+            "admin-moderation":
+              "Chat Moderation",
+            "admin-announcements":
+              "Announcements",
+            "admin-audit":
+              "Audit Logs",
+            "admin-system":
+              "System",
+            profile: "My Profile"
+          };
+
+          const page =
+            event.detail?.page ||
+            event.detail?.route ||
+            event.detail;
+
+          title.textContent =
+            titles[page] ||
+            "Math Class";
+        }
+      );
+
     })();
   </script>
 
-  <script type="module" src="./app.js"></script>
 </body>
-                </html>
+</html>
