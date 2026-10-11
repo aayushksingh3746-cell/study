@@ -1,8 +1,9 @@
-// ============================================================
-// MATH CLASS — TEACHER PORTAL
-// File: teacher.js
-// Firebase Modular SDK 10.5.0
-// ============================================================
+/* ============================================================
+   Math Class Virtual Classroom
+   teacher.js
+   Teacher dashboard / review / announcements / chat / doubts
+   Firebase Modular SDK 10.5.0
+   ============================================================ */
 
 import {
   ref,
@@ -11,33 +12,47 @@ import {
   push,
   update,
   remove,
-  onValue
+  query,
+  orderByChild,
+  limitToLast,
+  onValue,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
 
 import {
-  ref as storageRef,
+  storageRef,
   uploadBytes,
   getDownloadURL,
   deleteObject
-} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
+} from "./firebase-config.js";
 
 import {
   escapeHTML,
   formatDate,
   formatDateTime,
-  formatDuration,
   createStatusBadge,
   createEmptyState,
-  createButton,
+  createSkeleton,
+  validateRequired,
+  validateFileSize,
   openModal,
-  confirmDialog
+  safeFirebaseStorageURL
 } from "./components.js";
 
-// ============================================================
-// STATE
-// ============================================================
+const PATHS = {
+  users: "users",
+  logs: "daily_study_logs",
+  announcements: "announcements",
+  chat: "class_chat",
+  doubts: "direct_doubts"
+};
 
-const teacherState = {
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const MAX_CHAT_LENGTH = 1000;
+const MAX_ANNOUNCEMENT_TITLE = 120;
+const MAX_ANNOUNCEMENT_BODY = 5000;
+
+let state = {
   auth: null,
   db: null,
   storage: null,
@@ -47,1924 +62,1944 @@ const teacherState = {
   showPage: null,
 
   initialized: false,
-  unsubscribers: [],
-  pageChangeHandler: null,
+  currentPage: "teacher-dashboard",
 
   logs: [],
   announcements: [],
+  chatMessages: [],
   doubts: [],
-  users: [],
+  students: [],
 
-  currentPage: "dashboard",
-  busy: false
+  unsubscribers: [],
+  pageChangeHandler: null,
+  submitting: false
 };
 
-// IMPORTANT:
-// These paths must match the database paths used by the
-// student module and the Firebase Realtime Database.
-//
-// If your actual database still uses the old paths, migrate
-// the data or update every module consistently before deploying.
+/* ============================================================
+   BASIC HELPERS
+   ============================================================ */
 
-const PATHS = {
-  users: "users",
-  logs: "daily_study_logs",
-  announcements: "announcements",
-  doubts: "direct_doubts"
-};
-
-const MAX_ANNOUNCEMENT_LENGTH = 5000;
-const MAX_ATTACHMENT_MB = 10;
-
-// ============================================================
-// GENERAL HELPERS
-// ============================================================
-
-const $ = (selector, root = document) =>
-  root.querySelector(selector);
-
-function notify(message, type = "info") {
-  if (typeof teacherState.toast === "function") {
-    teacherState.toast(message, type);
-  } else {
-    console.log(`[Math Class: ${type}] ${message}`);
-  }
+function uid() {
+  return state.user?.uid || "";
 }
 
-function currentUID() {
-  return teacherState.user?.uid || "";
-}
-
-function currentName() {
+function teacherName() {
   return (
-    teacherState.profile?.name ||
-    teacherState.user?.displayName ||
-    teacherState.user?.email?.split("@")[0] ||
+    state.profile?.displayName ||
+    state.profile?.name ||
+    state.user?.displayName ||
+    state.user?.email ||
     "Teacher"
   );
 }
 
-function toArray(value) {
-  if (!value || typeof value !== "object") {
-    return [];
+function now() {
+  return Date.now();
+}
+
+function showToast(message, error = false) {
+  if (typeof state.toast === "function") {
+    state.toast(message, error);
+  } else {
+    console[error ? "error" : "log"](message);
   }
+}
+
+function el(selector) {
+  return document.querySelector(selector);
+}
+
+function all(selector) {
+  return [...document.querySelectorAll(selector)];
+}
+
+function escape(value) {
+  return escapeHTML(String(value ?? ""));
+}
+
+function getRecords(snapshot) {
+  const value = snapshot.val() || {};
 
   return Object.entries(value)
-    .filter(([, item]) => item && typeof item === "object")
-    .map(([key, item]) => ({
-      ...item,
-      id: item.id || key
-    }));
+    .map(([id, record]) => ({
+      id,
+      ...(record || {})
+    }))
+    .filter(Boolean);
 }
 
-function safeNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function errorMessage(error) {
-  const code = error?.code || "";
-
-  const messages = {
-    PERMISSION_DENIED:
-      "Firebase denied access. Check the database security rules and teacher permissions.",
-
-    "storage/unauthorized":
-      "You do not have permission to upload or delete this file.",
-
-    "storage/retry-limit-exceeded":
-      "The upload failed. Please try again.",
-
-    "storage/canceled":
-      "The upload was cancelled.",
-
-    "storage/object-not-found":
-      "The requested attachment could not be found.",
-
-    "auth/network-request-failed":
-      "Network error. Check your internet connection."
-  };
-
-  return (
-    messages[code] ||
-    error?.message ||
-    "An unexpected error occurred."
+function sortNewest(records, field = "createdAt") {
+  return [...records].sort(
+    (a, b) => Number(b?.[field] || 0) - Number(a?.[field] || 0)
   );
 }
 
-function reportError(error, action) {
-  console.error(`[Math Class Teacher] ${action}:`, error);
-  notify(`${action}: ${errorMessage(error)}`, "error");
+function addUnsubscriber(unsubscribe) {
+  if (typeof unsubscribe === "function") {
+    state.unsubscribers.push(unsubscribe);
+  }
 }
 
-function element(tag, className = "", text = "") {
-  const node = document.createElement(tag);
-
-  if (className) {
-    node.className = className;
+function cleanupListeners() {
+  for (const unsubscribe of state.unsubscribers.splice(0)) {
+    try {
+      unsubscribe();
+    } catch (error) {
+      console.warn("Teacher listener cleanup failed:", error);
+    }
   }
-
-  if (text !== "") {
-    node.textContent = String(text);
-  }
-
-  return node;
-}
-
-function button(label, onClick, variant = "primary") {
-  return createButton({
-    label,
-    onClick,
-    variant
-  });
 }
 
 function isTeacher() {
-  const role = String(
-    teacherState.profile?.role || "teacher"
-  ).toLowerCase();
-
-  return ["teacher", "admin"].includes(role);
+  const role = state.profile?.role;
+  return role === "teacher" || role === "admin";
 }
 
-// ============================================================
-// FIREBASE SUBSCRIPTIONS
-// ============================================================
+/* ============================================================
+   SAFE PAGE NAVIGATION
+   ============================================================ */
 
-function subscribe(path, callback, label) {
-  if (!teacherState.db) {
-    notify("Database is not initialized.", "error");
-    return () => {};
+function navigate(page) {
+  state.currentPage = page;
+
+  if (typeof state.showPage === "function") {
+    state.showPage(page);
   }
 
-  const unsubscribe = onValue(
-    ref(teacherState.db, path),
-
-    snapshot => {
-      try {
-        callback(snapshot.val());
-      } catch (error) {
-        reportError(error, `Could not process ${label}`);
-      }
-    },
-
-    error => {
-      reportError(
-        error,
-        `Could not load ${label} (${path})`
-      );
-    }
-  );
-
-  teacherState.unsubscribers.push(unsubscribe);
-
-  return unsubscribe;
+  renderCurrentPage();
 }
 
-// ============================================================
-// STYLES
-// ============================================================
+function renderCurrentPage() {
+  const container =
+    el("#pageContent") ||
+    el("#mainContent") ||
+    el("#teacherContent");
 
-function injectStyles() {
-  if ($("#teacher-module-styles")) {
-    return;
+  if (!container) return;
+
+  switch (state.currentPage) {
+    case "teacher-dashboard":
+    case "teacher":
+    case "dashboard":
+      renderDashboard(container);
+      break;
+
+    case "teacher-logs":
+    case "teacher-practice":
+    case "practice-review":
+      renderPracticeReview(container);
+      break;
+
+    case "teacher-announcements":
+      renderAnnouncements(container);
+      break;
+
+    case "teacher-chat":
+    case "class-chat":
+      renderChat(container);
+      break;
+
+    case "teacher-doubts":
+    case "doubt-inbox":
+      renderDoubts(container);
+      break;
+
+    case "teacher-students":
+      renderStudents(container);
+      break;
+
+    case "teacher-profile":
+    case "profile":
+      renderProfile(container);
+      break;
+
+    default:
+      renderDashboard(container);
   }
+}
 
-  const style = element("style");
-  style.id = "teacher-module-styles";
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
 
-  style.textContent = `
-    .teacher-layout {
-      display: grid;
-      gap: 24px;
-      width: 100%;
-    }
+function renderDashboard(container) {
+  const pendingLogs = state.logs.filter(
+    item => item.status === "submitted" || !item.status
+  ).length;
 
-    .teacher-welcome {
-      padding: 28px;
-      background: #FFFFFF;
-      border: 1px solid #E2E8F0;
-      border-radius: 18px;
-    }
+  const pendingDoubts = state.doubts.filter(
+    item => !["resolved", "closed"].includes(item.status)
+  ).length;
 
-    .teacher-eyebrow {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 1.2px;
-      color: #64748B;
-      text-transform: uppercase;
-    }
+  const publishedAnnouncements = state.announcements.filter(
+    item => item.published === true
+  ).length;
 
-    .teacher-title {
-      margin: 8px 0;
-      color: #111827;
-      font-size: clamp(24px, 3vw, 32px);
-      font-weight: 750;
-      letter-spacing: -1px;
-      overflow-wrap: anywhere;
-    }
+  const visibleChat = state.chatMessages.filter(
+    item => item.deleted !== true && item.hidden !== true
+  ).length;
 
-    .teacher-description {
-      margin: 0;
-      color: #64748B;
-      font-size: 14px;
-      line-height: 1.7;
-    }
+  container.innerHTML = `
+    <section class="teacher-dashboard">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">TEACHER PORTAL</p>
+          <h1>Welcome, ${escape(teacherName())}</h1>
+          <p>Manage student practice, doubts, announcements and classroom communication.</p>
+        </div>
+      </div>
 
-    .teacher-stats {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
-    }
+      <div class="stats-grid">
+        ${statCard("Practice Reviews", pendingLogs, "teacher-logs", "Pending student submissions")}
+        ${statCard("Open Doubts", pendingDoubts, "teacher-doubts", "Questions waiting for a reply")}
+        ${statCard("Announcements", publishedAnnouncements, "teacher-announcements", "Published classroom notices")}
+        ${statCard("Chat Messages", visibleChat, "teacher-chat", "Visible classroom messages")}
+      </div>
 
-    .teacher-stat {
-      min-width: 0;
-      padding: 20px;
-      background: #FFFFFF;
-      border: 1px solid #E2E8F0;
-      border-radius: 14px;
-    }
+      <div class="teacher-dashboard-grid">
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Recent Practice</h2>
+              <p>Latest student submissions requiring attention.</p>
+            </div>
+            <button class="btn btn-secondary" data-teacher-action="logs">
+              View all
+            </button>
+          </div>
 
-    .teacher-stat-label {
-      margin: 0 0 12px;
-      color: #64748B;
-      font-size: 13px;
-    }
+          ${renderRecentLogs()}
+        </article>
 
-    .teacher-stat-value {
-      font-size: 28px;
-      font-weight: 750;
-      color: #111827;
-      overflow-wrap: anywhere;
-    }
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Recent Doubts</h2>
+              <p>Private student questions.</p>
+            </div>
+            <button class="btn btn-secondary" data-teacher-action="doubts">
+              Open inbox
+            </button>
+          </div>
 
-    .teacher-section {
-      min-width: 0;
-      padding: 22px;
-      border: 1px solid #E2E8F0;
-      border-radius: 16px;
-      background: #FFFFFF;
-    }
+          ${renderRecentDoubts()}
+        </article>
+      </div>
 
-    .teacher-section-heading {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 20px;
-    }
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Quick actions</h2>
+            <p>Common classroom tasks.</p>
+          </div>
+        </div>
 
-    .teacher-section-heading h2 {
-      margin: 0;
-      font-size: 17px;
-      color: #111827;
-    }
+        <div class="quick-actions">
+          <button class="btn btn-primary" data-teacher-action="new-announcement">
+            New announcement
+          </button>
 
-    .teacher-section-heading p {
-      margin: 6px 0 0;
-      font-size: 13px;
-      color: #64748B;
-    }
+          <button class="btn btn-secondary" data-teacher-action="logs">
+            Review practice
+          </button>
 
-    .teacher-list {
-      display: grid;
-      gap: 12px;
-    }
+          <button class="btn btn-secondary" data-teacher-action="doubts">
+            Answer doubts
+          </button>
 
-    .teacher-item {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 14px;
-      padding: 16px;
-      border: 1px solid #E2E8F0;
-      border-radius: 12px;
-      background: #FFFFFF;
-    }
-
-    .teacher-item-content {
-      flex: 1;
-      min-width: 180px;
-      overflow-wrap: anywhere;
-    }
-
-    .teacher-item h3 {
-      margin: 0 0 7px;
-      color: #111827;
-      font-size: 15px;
-      overflow-wrap: anywhere;
-    }
-
-    .teacher-item p {
-      margin: 4px 0;
-      color: #64748B;
-      font-size: 13px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-
-    .teacher-item-actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .teacher-form {
-      display: grid;
-      gap: 17px;
-    }
-
-    .teacher-field {
-      display: grid;
-      gap: 7px;
-    }
-
-    .teacher-field label {
-      color: #334155;
-      font-size: 13px;
-      font-weight: 650;
-    }
-
-    .teacher-field input,
-    .teacher-field textarea,
-    .teacher-field select {
-      box-sizing: border-box;
-      width: 100%;
-      min-height: 44px;
-      padding: 11px 12px;
-      border: 1px solid #CBD5E1;
-      border-radius: 10px;
-      background: #FFFFFF;
-      color: #111827;
-      font: inherit;
-      font-size: 14px;
-    }
-
-    .teacher-field textarea {
-      min-height: 120px;
-      resize: vertical;
-    }
-
-    .teacher-field input:focus,
-    .teacher-field textarea:focus,
-    .teacher-field select:focus {
-      outline: none;
-      border-color: #6366F1;
-      box-shadow: 0 0 0 3px rgba(99,102,241,.12);
-    }
-
-    .teacher-filter {
-      min-height: 44px;
-      max-width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #CBD5E1;
-      border-radius: 10px;
-      background: #FFFFFF;
-      color: #334155;
-      font: inherit;
-    }
-
-    .teacher-feedback {
-      box-sizing: border-box;
-      width: 100%;
-      min-height: 75px;
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #CBD5E1;
-      border-radius: 8px;
-      font: inherit;
-      resize: vertical;
-    }
-
-    .teacher-table-wrap {
-      width: 100%;
-      overflow-x: auto;
-    }
-
-    .teacher-table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 13px;
-    }
-
-    .teacher-table th,
-    .teacher-table td {
-      padding: 13px 12px;
-      border-bottom: 1px solid #E2E8F0;
-      vertical-align: top;
-    }
-
-    .teacher-table th {
-      color: #64748B;
-      font-weight: 650;
-      white-space: nowrap;
-    }
-
-    .teacher-table td {
-      color: #334155;
-    }
-
-    .teacher-insight-bar {
-      height: 9px;
-      min-width: 60px;
-      overflow: hidden;
-      border-radius: 99px;
-      background: #E2E8F0;
-    }
-
-    .teacher-insight-bar span {
-      display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: #4F46E5;
-    }
-
-    @media (max-width: 900px) {
-      .teacher-stats {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 600px) {
-      .teacher-welcome,
-      .teacher-section {
-        padding: 18px;
-      }
-
-      .teacher-item-actions {
-        width: 100%;
-      }
-
-      .teacher-item-actions .mc-button {
-        flex: 1;
-      }
-    }
+          <button class="btn btn-secondary" data-teacher-action="chat">
+            Open class chat
+          </button>
+        </div>
+      </article>
+    </section>
   `;
 
-  document.head.appendChild(style);
+  bindDashboardEvents(container);
 }
 
-// ============================================================
-// PAGE HELPERS
-// ============================================================
+function statCard(title, value, page, subtitle) {
+  return `
+    <button class="stat-card" data-teacher-action="${escape(page)}">
+      <span class="stat-card-label">${escape(title)}</span>
+      <strong class="stat-card-value">${escape(value)}</strong>
+      <span class="stat-card-subtitle">${escape(subtitle)}</span>
+    </button>
+  `;
+}
 
-function getPage(page, title, description = "") {
-  let section = $(`[data-page="${page}"]`);
+function renderRecentLogs() {
+  const records = sortNewest(state.logs).slice(0, 5);
 
-  if (!section) {
-    const app =
-      $("#appView") ||
-      $("#dashboardView") ||
-      $("#application") ||
-      document.body;
-
-    section = element("section", "teacher-layout");
-    section.dataset.page = page;
-    section.hidden = true;
-
-    app.appendChild(section);
+  if (!records.length) {
+    return createEmptyState(
+      "No practice submissions",
+      "Student practice logs will appear here."
+    );
   }
 
-  section.classList.add("teacher-layout");
-  section.replaceChildren();
+  return `
+    <div class="record-list">
+      ${records.map(log => `
+        <button class="record-row" data-log-id="${escape(log.id)}">
+          <div>
+            <strong>${escape(log.studentName || "Student")}</strong>
+            <span>${escape(log.topic || "Practice session")}</span>
+          </div>
+          <div class="record-row-meta">
+            ${createStatusBadge(log.status || "submitted")}
+            <small>${formatDate(log.createdAt || log.date)}</small>
+          </div>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
 
-  if (title) {
-    const heading = element("div", "teacher-welcome");
+function renderRecentDoubts() {
+  const records = sortNewest(state.doubts).slice(0, 5);
 
-    heading.append(
-      element("div", "teacher-eyebrow", "TEACHER PORTAL"),
-      element("h1", "teacher-title", title),
-      element("p", "teacher-description", description)
+  if (!records.length) {
+    return createEmptyState(
+      "No doubts",
+      "Student questions will appear here."
     );
-
-    section.appendChild(heading);
   }
 
-  return section;
+  return `
+    <div class="record-list">
+      ${records.map(doubt => `
+        <button class="record-row" data-doubt-id="${escape(doubt.id)}">
+          <div>
+            <strong>${escape(doubt.studentName || "Student")}</strong>
+            <span>${escape(doubt.subject || "Mathematics")}</span>
+          </div>
+          <div class="record-row-meta">
+            ${createStatusBadge(doubt.status || "submitted")}
+            <small>${formatDate(doubt.createdAt)}</small>
+          </div>
+        </button>
+      `).join("")}
+    </div>
+  `;
 }
 
-function makeSection(title, description = "") {
-  const section = element("section", "teacher-section");
-  const heading = element("div", "teacher-section-heading");
-  const group = document.createElement("div");
+function bindDashboardEvents(container) {
+  all("[data-teacher-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.teacherAction;
 
-  group.appendChild(element("h2", "", title));
-
-  if (description) {
-    group.appendChild(element("p", "", description));
-  }
-
-  heading.appendChild(group);
-  section.appendChild(heading);
-
-  return { section, heading };
-}
-
-// ============================================================
-// DASHBOARD
-// ============================================================
-
-function renderStat(label, value) {
-  const card = element("article", "teacher-stat");
-
-  card.append(
-    element("p", "teacher-stat-label", label),
-    element("div", "teacher-stat-value", String(value))
-  );
-
-  return card;
-}
-
-function renderDashboard() {
-  const section = getPage(
-    "dashboard",
-    `Welcome, ${currentName()}`,
-    "Your action center for practice verification, classroom updates, and student support."
-  );
-
-  const pending = teacherState.logs.filter(
-    log => !["verified", "rejected"].includes(log.status)
-  ).length;
-
-  const unanswered = teacherState.doubts.filter(
-    doubt =>
-      !doubt.reply &&
-      !["resolved", "closed"].includes(doubt.status)
-  ).length;
-
-  const published = teacherState.announcements.filter(
-    item => item.published !== false
-  ).length;
-
-  const studentIDs = new Set(
-    teacherState.logs.map(log => log.uid).filter(Boolean)
-  );
-
-  const stats = element("div", "teacher-stats");
-
-  stats.append(
-    renderStat("Awaiting review", pending),
-    renderStat("Open doubts", unanswered),
-    renderStat("Published notices", published),
-    renderStat("Active learners", studentIDs.size)
-  );
-
-  section.appendChild(stats);
-
-  const actions = makeSection(
-    "Action center",
-    "Focus on the tasks that need attention."
-  );
-
-  const list = element("div", "teacher-list");
-
-  const actionItems = [
-    {
-      title: "Review practice logs",
-      description: `${pending} submission(s) awaiting review.`,
-      action: "verification"
-    },
-    {
-      title: "Respond to student doubts",
-      description: `${unanswered} question(s) awaiting a response.`,
-      action: "doubts"
-    },
-    {
-      title: "Manage announcements",
-      description: "Publish classroom updates and study resources.",
-      action: "announcements"
-    },
-    {
-      title: "Student insights",
-      description: "Review recorded practice activity.",
-      action: "student-insights"
-    }
-  ];
-
-  actionItems.forEach(item => {
-    const card = element("article", "teacher-item");
-    const content = element("div", "teacher-item-content");
-
-    content.append(
-      element("h3", "", item.title),
-      element("p", "", item.description)
-    );
-
-    card.append(
-      content,
-      button(
-        "Open",
-        () => teacherState.showPage?.(item.action),
-        "secondary"
-      )
-    );
-
-    list.appendChild(card);
+      if (action === "new-announcement") {
+        openAnnouncementEditor();
+      } else if (action === "logs") {
+        navigate("teacher-logs");
+      } else if (action === "doubts") {
+        navigate("teacher-doubts");
+      } else if (action === "chat") {
+        navigate("teacher-chat");
+      } else if (action === "teacher-profile" || action === "profile") {
+        navigate("teacher-profile");
+      } else if (action === "teacher-students") {
+        navigate("teacher-students");
+      } else {
+        navigate(action);
+      }
+    });
   });
 
-  actions.section.appendChild(list);
-  section.appendChild(actions.section);
+  all("[data-log-id]").forEach(button => {
+    button.addEventListener("click", () => {
+      const log = state.logs.find(item => item.id === button.dataset.logId);
+      if (log) openLogReview(log);
+    });
+  });
+
+  all("[data-doubt-id]").forEach(button => {
+    button.addEventListener("click", () => {
+      const doubt = state.doubts.find(
+        item => item.id === button.dataset.doubtId
+      );
+
+      if (doubt) openDoubtReply(doubt);
+    });
+  });
 }
 
-// ============================================================
-// PRACTICE VERIFICATION
-// ============================================================
+/* ============================================================
+   PRACTICE REVIEW
+   ============================================================ */
 
-function renderPracticeItem(log) {
-  const card = element("article", "teacher-item");
-  const content = element("div", "teacher-item-content");
+function renderPracticeReview(container) {
+  const logs = sortNewest(state.logs);
 
-  content.append(
-    element("h3", "", log.topic || "Math practice"),
-    element(
-      "p",
-      "",
-      `Student: ${log.studentName || log.studentEmail || log.uid || "Unknown"}`
-    ),
-    element(
-      "p",
-      "",
-      `Date: ${formatDate(log.date)} · ${safeNumber(log.questions)} questions · ${formatDuration(log.duration)}`
-    ),
-    element(
-      "p",
-      "",
-      `Submitted: ${formatDateTime(log.createdAt)}`
-    )
-  );
+  container.innerHTML = `
+    <section class="teacher-page">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">PRACTICE REVIEW</p>
+          <h1>Student practice</h1>
+          <p>Review submitted practice sessions and provide feedback.</p>
+        </div>
+      </div>
 
-  if (log.notes) {
-    content.appendChild(element("p", "", `Notes: ${log.notes}`));
-  }
+      <div class="toolbar">
+        <select id="logStatusFilter" class="input">
+          <option value="all">All submissions</option>
+          <option value="submitted">Pending review</option>
+          <option value="verified">Verified</option>
+          <option value="rejected">Rejected</option>
+        </select>
 
-  if (log.proofURL) {
-    const link = document.createElement("a");
+        <input
+          id="logSearch"
+          class="input"
+          type="search"
+          placeholder="Search student or topic..."
+        />
+      </div>
 
-    link.href = log.proofURL;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = "View proof image";
+      <div id="teacherLogsList">
+        ${renderLogsTable(logs)}
+      </div>
+    </section>
+  `;
 
-    content.appendChild(link);
-  }
+  const filter = el("#logStatusFilter");
+  const search = el("#logSearch");
 
-  content.appendChild(
-    createStatusBadge(log.status || "submitted")
-  );
+  const refresh = () => {
+    const status = filter?.value || "all";
+    const term = (search?.value || "").trim().toLowerCase();
 
-  const actions = element("div", "teacher-item-actions");
+    const filtered = logs.filter(log => {
+      const statusMatch =
+        status === "all" ||
+        (log.status || "submitted") === status;
 
-  if (!["verified", "rejected"].includes(log.status)) {
-    const feedback = document.createElement("textarea");
+      const searchMatch =
+        !term ||
+        String(log.studentName || "").toLowerCase().includes(term) ||
+        String(log.studentEmail || "").toLowerCase().includes(term) ||
+        String(log.topic || "").toLowerCase().includes(term);
 
-    feedback.className = "teacher-feedback";
-    feedback.placeholder = "Optional feedback for the student...";
-    feedback.maxLength = 1000;
-    feedback.setAttribute("aria-label", "Teacher feedback");
+      return statusMatch && searchMatch;
+    });
 
-    const approve = button(
-      "Verify",
-      async () => {
-        await updateLogStatus(
-          log,
-          "verified",
-          feedback.value.trim()
-        );
-      }
-    );
+    const list = el("#teacherLogsList");
+    if (list) list.innerHTML = renderLogsTable(filtered);
 
-    const reject = button(
-      "Reject",
-      async () => {
-        const confirmed = await confirmDialog({
-          title: "Reject this practice log?",
-          message:
-            "The student will see the rejection status and your feedback.",
-          confirmLabel: "Reject log",
-          danger: true
-        });
+    bindLogButtons();
+  };
 
-        if (confirmed) {
-          await updateLogStatus(
-            log,
-            "rejected",
-            feedback.value.trim()
-          );
-        }
-      },
-      "danger"
-    );
+  filter?.addEventListener("change", refresh);
+  search?.addEventListener("input", refresh);
 
-    actions.append(approve, reject);
-    content.appendChild(feedback);
-  } else if (log.teacherFeedback) {
-    content.appendChild(
-      element("p", "", `Feedback: ${log.teacherFeedback}`)
-    );
-  }
-
-  card.append(content, actions);
-
-  return card;
+  bindLogButtons();
 }
 
-async function updateLogStatus(log, status, feedback) {
-  if (!log.id) {
-    notify("This practice record has no valid ID.", "error");
-    return;
+function renderLogsTable(logs) {
+  if (!logs.length) {
+    return createEmptyState(
+      "No practice logs found",
+      "There are no submissions matching your current filter."
+    );
   }
+
+  return `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Topic</th>
+            <th>Questions</th>
+            <th>Duration</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${logs.map(log => `
+            <tr>
+              <td>
+                <strong>${escape(log.studentName || "Student")}</strong>
+                <small>${escape(log.studentEmail || "")}</small>
+              </td>
+
+              <td>${escape(log.topic || "—")}</td>
+              <td>${escape(log.questions ?? log.questionsSolved ?? "—")}</td>
+              <td>${escape(log.duration ?? log.durationMinutes ?? "—")} min</td>
+              <td>${formatDate(log.date || log.createdAt)}</td>
+
+              <td>
+                ${createStatusBadge(log.status || "submitted")}
+              </td>
+
+              <td>
+                <button
+                  class="btn btn-small btn-secondary"
+                  data-review-log="${escape(log.id)}"
+                >
+                  Review
+                </button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function bindLogButtons() {
+  all("[data-review-log]").forEach(button => {
+    button.addEventListener("click", () => {
+      const log = state.logs.find(
+        item => item.id === button.dataset.reviewLog
+      );
+
+      if (log) openLogReview(log);
+    });
+  });
+}
+
+function openLogReview(log) {
+  const proofURL = safeFirebaseStorageURL?.(
+    log.proofURL || log.proofUrl || ""
+  );
+
+  const content = `
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">PRACTICE REVIEW</p>
+        <h2>${escape(log.studentName || "Student")}</h2>
+      </div>
+    </div>
+
+    <div class="review-grid">
+      <div>
+        <span class="field-label">Topic</span>
+        <strong>${escape(log.topic || "—")}</strong>
+      </div>
+
+      <div>
+        <span class="field-label">Date</span>
+        <strong>${formatDate(log.date || log.createdAt)}</strong>
+      </div>
+
+      <div>
+        <span class="field-label">Questions</span>
+        <strong>${escape(log.questions ?? log.questionsSolved ?? "—")}</strong>
+      </div>
+
+      <div>
+        <span class="field-label">Duration</span>
+        <strong>${escape(log.duration ?? log.durationMinutes ?? "—")} minutes</strong>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Student notes</label>
+      <div class="readonly-box">${escape(log.notes || "No notes provided.")}</div>
+    </div>
+
+    ${
+      proofURL
+        ? `
+          <div class="form-group">
+            <label>Proof</label>
+            <a
+              class="btn btn-secondary"
+              href="${escape(proofURL)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open proof
+            </a>
+          </div>
+        `
+        : ""
+    }
+
+    <div class="form-group">
+      <label for="teacherFeedback">Teacher feedback</label>
+      <textarea
+        id="teacherFeedback"
+        class="input textarea"
+        maxlength="2000"
+        rows="5"
+        placeholder="Write useful feedback for the student..."
+      >${escape(log.teacherFeedback || "")}</textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-review-action="reject"
+      >
+        Reject
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-review-action="verify"
+      >
+        Mark verified
+      </button>
+    </div>
+  `;
+
+  openModal(content);
+
+  all("[data-review-action]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const feedback =
+        el("#teacherFeedback")?.value.trim() || "";
+
+      const status =
+        button.dataset.reviewAction === "verify"
+          ? "verified"
+          : "rejected";
+
+      await reviewLog(log, status, feedback);
+    });
+  });
+}
+
+async function reviewLog(log, status, feedback) {
+  if (!state.db || !uid() || !log.id) return;
 
   try {
-    await update(
-      ref(
-        teacherState.db,
-        `${PATHS.logs}/${log.id}`
-      ),
-      {
-        status,
-        teacherFeedback: feedback,
-        reviewedBy: currentUID(),
-        reviewedByName: currentName(),
-        reviewedAt: Date.now(),
-        updatedAt: Date.now()
-      }
-    );
+    const updates = {
+      status,
+      teacherFeedback: feedback,
+      reviewedBy: uid(),
+      reviewedByName: teacherName(),
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
 
-    notify(
+    await update(ref(state.db, `${PATHS.logs}/${log.id}`), updates);
+
+    closeAnyModal();
+    showToast(
       status === "verified"
-        ? "Practice log verified."
-        : "Practice log rejected.",
-      "success"
+        ? "Practice marked as verified."
+        : "Practice marked as rejected."
     );
   } catch (error) {
-    reportError(error, "Could not update practice log");
+    console.error(error);
+    showToast(error.message || "Could not update practice log.", true);
   }
 }
 
-function renderVerification() {
-  const section = getPage(
-    "verification",
-    "Verification Queue",
-    "Review student practice sessions and record your decision."
+/* ============================================================
+   ANNOUNCEMENTS
+   ============================================================ */
+
+function renderAnnouncements(container) {
+  const records = sortNewest(state.announcements);
+
+  container.innerHTML = `
+    <section class="teacher-page">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">CLASSROOM COMMUNICATION</p>
+          <h1>Announcements</h1>
+          <p>Create and manage notices for your mathematics class.</p>
+        </div>
+
+        <button id="newAnnouncementBtn" class="btn btn-primary">
+          New announcement
+        </button>
+      </div>
+
+      <div id="announcementList">
+        ${renderAnnouncementList(records)}
+      </div>
+    </section>
+  `;
+
+  el("#newAnnouncementBtn")?.addEventListener(
+    "click",
+    () => openAnnouncementEditor()
   );
 
-  const panel = makeSection(
-    "Practice submissions",
-    "Pending submissions appear first."
-  );
+  bindAnnouncementButtons();
+}
 
-  const filter = document.createElement("select");
+function renderAnnouncementList(records) {
+  if (!records.length) {
+    return createEmptyState(
+      "No announcements",
+      "Create your first classroom announcement."
+    );
+  }
 
-  filter.className = "teacher-filter";
-  filter.setAttribute(
-    "aria-label",
-    "Filter practice submissions"
-  );
+  return `
+    <div class="announcement-list">
+      ${records.map(item => `
+        <article class="announcement-card">
+          <div class="announcement-card-header">
+            <div>
+              <h3>${escape(item.title || "Untitled announcement")}</h3>
+              <p>
+                ${formatDateTime(item.createdAt || item.updatedAt)}
+                · ${item.published ? "Published" : "Draft"}
+              </p>
+            </div>
 
-  [
-    ["all", "All submissions"],
-    ["submitted", "Submitted"],
-    ["verified", "Verified"],
-    ["rejected", "Rejected"]
-  ].forEach(([value, label]) => {
-    const option = document.createElement("option");
+            ${createStatusBadge(item.published ? "published" : "draft")}
+          </div>
 
-    option.value = value;
-    option.textContent = label;
+          <div class="announcement-body">
+            ${escape(item.body || "").replace(/\n/g, "<br>")}
+          </div>
 
-    filter.appendChild(option);
+          ${
+            item.attachmentURL || item.attachmentUrl
+              ? `
+                <a
+                  class="attachment-link"
+                  href="${escape(
+                    safeFirebaseStorageURL?.(
+                      item.attachmentURL || item.attachmentUrl
+                    ) || "#"
+                  )}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  ${escape(item.attachmentName || "Open attachment")}
+                </a>
+              `
+              : ""
+          }
+
+          <div class="announcement-actions">
+            <button
+              class="btn btn-small btn-secondary"
+              data-edit-announcement="${escape(item.id)}"
+            >
+              Edit
+            </button>
+
+            <button
+              class="btn btn-small btn-secondary"
+              data-toggle-announcement="${escape(item.id)}"
+            >
+              ${item.published ? "Unpublish" : "Publish"}
+            </button>
+
+            <button
+              class="btn btn-small btn-danger"
+              data-delete-announcement="${escape(item.id)}"
+            >
+              Delete
+            </button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function bindAnnouncementButtons() {
+  all("[data-edit-announcement]").forEach(button => {
+    button.addEventListener("click", () => {
+      const item = state.announcements.find(
+        announcement =>
+          announcement.id === button.dataset.editAnnouncement
+      );
+
+      if (item) openAnnouncementEditor(item);
+    });
   });
 
-  panel.heading.appendChild(filter);
-
-  const list = element("div", "teacher-list");
-
-  function renderList() {
-    list.replaceChildren();
-
-    let logs = [...teacherState.logs];
-
-    if (filter.value !== "all") {
-      logs = logs.filter(
-        log => (log.status || "submitted") === filter.value
-      );
-    }
-
-    logs.sort((a, b) => {
-      const aPending =
-        !["verified", "rejected"].includes(a.status);
-
-      const bPending =
-        !["verified", "rejected"].includes(b.status);
-
-      if (aPending !== bPending) {
-        return aPending ? -1 : 1;
-      }
-
-      return safeNumber(b.createdAt) - safeNumber(a.createdAt);
-    });
-
-    if (!logs.length) {
-      list.appendChild(
-        createEmptyState({
-          icon: "✓",
-          title: "No submissions found",
-          description:
-            "Submissions matching this filter will appear here."
-        })
+  all("[data-toggle-announcement]").forEach(button => {
+    button.addEventListener("click", () => {
+      const item = state.announcements.find(
+        announcement =>
+          announcement.id === button.dataset.toggleAnnouncement
       );
 
-      return;
-    }
-
-    logs.forEach(log => {
-      list.appendChild(renderPracticeItem(log));
+      if (item) toggleAnnouncement(item);
     });
-  }
+  });
 
-  filter.addEventListener("change", renderList);
-  renderList();
+  all("[data-delete-announcement]").forEach(button => {
+    button.addEventListener("click", () => {
+      const item = state.announcements.find(
+        announcement =>
+          announcement.id === button.dataset.deleteAnnouncement
+      );
 
-  panel.section.appendChild(list);
-  section.appendChild(panel.section);
-}
-
-// ============================================================
-// ANNOUNCEMENT MANAGEMENT
-// ============================================================
-
-function renderAnnouncementItem(item) {
-  const card = element("article", "teacher-item");
-  const content = element("div", "teacher-item-content");
-
-  content.append(
-    element(
-      "h3",
-      "",
-      item.title || "Untitled announcement"
-    ),
-    element("p", "", item.body || item.message || ""),
-    element(
-      "p",
-      "",
-      `Created ${formatDateTime(item.createdAt)}`
-    )
-  );
-
-  content.appendChild(
-    createStatusBadge(
-      item.published === false ? "inactive" : "published"
-    )
-  );
-
-  if (item.attachmentURL) {
-    const link = document.createElement("a");
-
-    link.href = item.attachmentURL;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent =
-      item.attachmentName || "View attachment";
-
-    content.appendChild(link);
-  }
-
-  const actions = element("div", "teacher-item-actions");
-
-  actions.append(
-    button(
-      "Edit",
-      () => openAnnouncementEditor(item),
-      "secondary"
-    ),
-    button(
-      item.published === false ? "Publish" : "Unpublish",
-      () => toggleAnnouncementPublished(item),
-      "secondary"
-    ),
-    button(
-      "Delete",
-      () => deleteAnnouncement(item),
-      "danger"
-    )
-  );
-
-  card.append(content, actions);
-
-  return card;
+      if (item) deleteAnnouncement(item);
+    });
+  });
 }
 
 function openAnnouncementEditor(existing = null) {
-  const form = document.createElement("form");
-  form.className = "teacher-form";
+  const editing = Boolean(existing);
 
-  const titleField = element("div", "teacher-field");
+  const content = `
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">
+          ${editing ? "EDIT ANNOUNCEMENT" : "NEW ANNOUNCEMENT"}
+        </p>
+        <h2>${editing ? "Edit announcement" : "Create announcement"}</h2>
+      </div>
+    </div>
 
-  const titleLabel = element(
-    "label",
-    "",
-    "Announcement title"
-  );
+    <form id="announcementForm">
+      <div class="form-group">
+        <label for="announcementTitle">Title</label>
+        <input
+          id="announcementTitle"
+          class="input"
+          maxlength="${MAX_ANNOUNCEMENT_TITLE}"
+          required
+          value="${escape(existing?.title || "")}"
+          placeholder="e.g. Mathematics practice update"
+        />
+      </div>
 
-  titleLabel.htmlFor = "teacherAnnouncementTitle";
+      <div class="form-group">
+        <label for="announcementBody">Message</label>
+        <textarea
+          id="announcementBody"
+          class="input textarea"
+          maxlength="${MAX_ANNOUNCEMENT_BODY}"
+          rows="8"
+          required
+          placeholder="Write the announcement..."
+        >${escape(existing?.body || "")}</textarea>
+      </div>
 
-  const titleInput = document.createElement("input");
+      <div class="form-group">
+        <label for="announcementAttachment">Attachment</label>
+        <input
+          id="announcementAttachment"
+          class="input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,application/pdf,text/plain"
+        />
 
-  titleInput.id = "teacherAnnouncementTitle";
-  titleInput.name = "title";
-  titleInput.required = true;
-  titleInput.maxLength = 150;
-  titleInput.value = existing?.title || "";
-  titleInput.placeholder = "e.g. Weekly practice assignment";
+        <small>
+          Optional. Maximum 10 MB.
+        </small>
 
-  titleField.append(titleLabel, titleInput);
-
-  const bodyField = element("div", "teacher-field");
-
-  const bodyLabel = element(
-    "label",
-    "",
-    "Announcement details"
-  );
-
-  bodyLabel.htmlFor = "teacherAnnouncementBody";
-
-  const bodyInput = document.createElement("textarea");
-
-  bodyInput.id = "teacherAnnouncementBody";
-  bodyInput.name = "body";
-  bodyInput.required = true;
-  bodyInput.maxLength = MAX_ANNOUNCEMENT_LENGTH;
-  bodyInput.value =
-    existing?.body || existing?.message || "";
-  bodyInput.placeholder = "Write the announcement...";
-
-  bodyField.append(bodyLabel, bodyInput);
-
-  const attachmentField = element("div", "teacher-field");
-
-  const attachmentLabel = element(
-    "label",
-    "",
-    "Attachment (optional)"
-  );
-
-  attachmentLabel.htmlFor = "teacherAnnouncementFile";
-
-  const attachmentInput = document.createElement("input");
-
-  attachmentInput.id = "teacherAnnouncementFile";
-  attachmentInput.type = "file";
-  attachmentInput.accept =
-    ".pdf,image/jpeg,image/png,image/webp";
-
-  attachmentField.append(
-    attachmentLabel,
-    attachmentInput
-  );
-
-  form.append(
-    titleField,
-    bodyField,
-    attachmentField
-  );
-
-  let saving = false;
-
-  const modal = openModal({
-    title: existing
-      ? "Edit announcement"
-      : "Create announcement",
-
-    description:
-      "Publish a clear and useful classroom update.",
-
-    contentElement: form,
-    maxWidth: "620px",
-
-    actions: [
-      {
-        label: "Cancel",
-        variant: "secondary"
-      },
-      {
-        label: existing
-          ? "Save changes"
-          : "Publish announcement",
-
-        variant: "primary",
-        closeOnClick: false,
-
-        onClick: async () => {
-          if (saving) return;
-
-          const title = titleInput.value.trim();
-          const body = bodyInput.value.trim();
-
-          if (!title || !body) {
-            notify(
-              "Enter both a title and announcement details.",
-              "warning"
-            );
-            return;
-          }
-
-          if (body.length > MAX_ANNOUNCEMENT_LENGTH) {
-            notify("Announcement is too long.", "warning");
-            return;
-          }
-
-          saving = true;
-
-          try {
-            const success = await saveAnnouncement({
-              existing,
-              title,
-              body,
-              file: attachmentInput.files?.[0] || null
-            });
-
-            if (success) {
-              modal.close();
-            }
-          } finally {
-            saving = false;
-          }
+        ${
+          existing?.attachmentName
+            ? `
+              <p class="existing-file">
+                Existing: ${escape(existing.attachmentName)}
+              </p>
+            `
+            : ""
         }
-      }
-    ]
-  });
+      </div>
+
+      <label class="checkbox-row">
+        <input
+          id="announcementPublished"
+          type="checkbox"
+          ${existing?.published !== false ? "checked" : ""}
+        />
+        <span>Publish immediately</span>
+      </label>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-close-modal
+        >
+          Cancel
+        </button>
+
+        <button class="btn btn-primary" type="submit">
+          ${editing ? "Save changes" : "Create announcement"}
+        </button>
+      </div>
+    </form>
+  `;
+
+  openModal(content);
+
+  el("#announcementForm")?.addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+      await saveAnnouncement(existing);
+    }
+  );
+
+  el("[data-close-modal]")?.addEventListener(
+    "click",
+    closeAnyModal
+  );
 }
 
-async function saveAnnouncement({
-  existing,
-  title,
-  body,
-  file
-}) {
-  let uploadedPath = "";
-  let attachmentURL = existing?.attachmentURL || "";
-  let attachmentName = existing?.attachmentName || "";
+async function saveAnnouncement(existing = null) {
+  if (state.submitting || !state.db || !uid()) return;
+
+  const title = el("#announcementTitle")?.value.trim() || "";
+  const body = el("#announcementBody")?.value.trim() || "";
+  const published =
+    el("#announcementPublished")?.checked === true;
+
+  const file = el("#announcementAttachment")?.files?.[0] || null;
+
+  if (!validateRequired(title)) {
+    showToast("Enter an announcement title.", true);
+    return;
+  }
+
+  if (!validateRequired(body)) {
+    showToast("Enter an announcement message.", true);
+    return;
+  }
+
+  if (file && file.size > MAX_ATTACHMENT_SIZE) {
+    showToast("Attachment must be 10 MB or smaller.", true);
+    return;
+  }
+
+  state.submitting = true;
 
   try {
+    const announcementRef = existing?.id
+      ? ref(state.db, `${PATHS.announcements}/${existing.id}`)
+      : push(ref(state.db, PATHS.announcements));
+
+    const announcementId = existing?.id || announcementRef.key;
+
+    let attachmentURL =
+      existing?.attachmentURL ||
+      existing?.attachmentUrl ||
+      "";
+
+    let attachmentName =
+      existing?.attachmentName || "";
+
+    let attachmentPath =
+      existing?.attachmentPath || "";
+
+    let newUploadedPath = "";
+
     if (file) {
-      if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
-        notify(
-          `Attachment must be no larger than ${MAX_ATTACHMENT_MB} MB.`,
-          "warning"
-        );
+      const safeFileName = sanitizeFileName(file.name);
+      const path =
+        `teacher-announcements/${uid()}/${Date.now()}_${safeFileName}`;
 
-        return false;
-      }
+      const fileRef = storageRef(state.storage, path);
 
-      const allowedTypes = [
-        "application/pdf",
-        "image/jpeg",
-        "image/png",
-        "image/webp"
-      ];
+      await uploadBytes(fileRef, file, {
+        contentType: file.type || "application/octet-stream"
+      });
 
-      if (!allowedTypes.includes(file.type)) {
-        notify(
-          "Only PDF, JPG, PNG, and WebP attachments are allowed.",
-          "warning"
-        );
-
-        return false;
-      }
-
-      if (!teacherState.storage) {
-        throw new Error(
-          "Firebase Storage is not initialized."
-        );
-      }
-
-      const safeName = file.name.replace(
-        /[^a-zA-Z0-9._-]/g,
-        "_"
-      );
-
-      uploadedPath =
-        `teacher-announcements/${currentUID()}/${Date.now()}-${safeName}`;
-
-      const uploaded = await uploadBytes(
-        storageRef(
-          teacherState.storage,
-          uploadedPath
-        ),
-        file,
-        { contentType: file.type }
-      );
-
-      attachmentURL = await getDownloadURL(
-        uploaded.ref
-      );
-
+      attachmentURL = await getDownloadURL(fileRef);
       attachmentName = file.name;
+      attachmentPath = path;
+      newUploadedPath = path;
     }
 
-    const now = Date.now();
-
-    const record = {
+    const data = {
+      id: announcementId,
       title,
       body,
-      authorUID: currentUID(),
-      authorName: currentName(),
-      published: existing
-        ? existing.published !== false
-        : true,
-      updatedAt: now,
-
-      ...(attachmentURL
-        ? { attachmentURL, attachmentName }
-        : {})
+      authorUID: existing?.authorUID || uid(),
+      authorName: existing?.authorName || teacherName(),
+      published,
+      attachmentURL,
+      attachmentName,
+      attachmentPath,
+      createdAt: existing?.createdAt || now(),
+      updatedAt: serverTimestamp()
     };
 
-    if (existing?.id) {
-      await update(
-        ref(
-          teacherState.db,
-          `${PATHS.announcements}/${existing.id}`
-        ),
-        record
-      );
-    } else {
-      const announcementRef = push(
-        ref(
-          teacherState.db,
-          PATHS.announcements
-        )
-      );
+    await set(announcementRef, data);
 
-      await set(announcementRef, {
-        ...record,
-        id: announcementRef.key,
-        createdAt: now
-      });
-    }
-
-    notify(
-      existing
-        ? "Announcement updated."
-        : "Announcement published.",
-      "success"
-    );
-
-    return true;
-  } catch (error) {
-    reportError(error, "Could not save announcement");
-
-    if (uploadedPath && teacherState.storage) {
+    /*
+      Delete replaced attachment only after the database write
+      succeeds. This prevents an old file being deleted when
+      the database update fails.
+    */
+    if (
+      newUploadedPath &&
+      existing?.attachmentPath &&
+      existing.attachmentPath !== newUploadedPath
+    ) {
       try {
         await deleteObject(
-          storageRef(
-            teacherState.storage,
-            uploadedPath
-          )
+          storageRef(state.storage, existing.attachmentPath)
+        );
+      } catch (error) {
+        console.warn(
+          "Old announcement attachment could not be deleted:",
+          error
+        );
+      }
+    }
+
+    closeAnyModal();
+
+    showToast(
+      existing
+        ? "Announcement updated."
+        : "Announcement created."
+    );
+  } catch (error) {
+    console.error(error);
+
+    /*
+      If Storage upload succeeded but the RTDB write failed,
+      remove the newly-created orphan file.
+    */
+    if (newUploadedPath) {
+      try {
+        await deleteObject(
+          storageRef(state.storage, newUploadedPath)
         );
       } catch (cleanupError) {
         console.warn(
-          "[Math Class Teacher] Attachment cleanup failed:",
+          "Failed to clean up uploaded attachment:",
           cleanupError
         );
       }
     }
 
-    return false;
+    showToast(
+      error.message || "Could not save announcement.",
+      true
+    );
+  } finally {
+    state.submitting = false;
   }
 }
 
-async function toggleAnnouncementPublished(item) {
-  if (!item.id) {
-    notify("Announcement ID is missing.", "error");
-    return;
-  }
+async function toggleAnnouncement(item) {
+  if (!state.db || !item?.id) return;
 
   try {
     await update(
-      ref(
-        teacherState.db,
-        `${PATHS.announcements}/${item.id}`
-      ),
+      ref(state.db, `${PATHS.announcements}/${item.id}`),
       {
-        published: item.published === false,
-        updatedAt: Date.now()
+        published: item.published !== true,
+        updatedAt: serverTimestamp()
       }
     );
 
-    notify(
-      "Announcement visibility updated.",
-      "success"
+    showToast(
+      item.published
+        ? "Announcement unpublished."
+        : "Announcement published."
     );
   } catch (error) {
-    reportError(
-      error,
-      "Could not update announcement"
+    console.error(error);
+    showToast(
+      error.message || "Could not update announcement.",
+      true
     );
   }
 }
 
 async function deleteAnnouncement(item) {
-  if (!item.id) {
-    notify("Announcement ID is missing.", "error");
-    return;
-  }
+  if (!state.db || !item?.id) return;
 
-  const confirmed = await confirmDialog({
-    title: "Delete announcement?",
-    message:
-      "This removes the announcement from the classroom notice board.",
-    confirmLabel: "Delete",
-    danger: true
-  });
+  const confirmed = window.confirm(
+    `Delete "${item.title || "this announcement"}"?`
+  );
 
   if (!confirmed) return;
 
   try {
     await remove(
-      ref(
-        teacherState.db,
-        `${PATHS.announcements}/${item.id}`
-      )
+      ref(state.db, `${PATHS.announcements}/${item.id}`)
     );
 
-    notify("Announcement deleted.", "success");
-  } catch (error) {
-    reportError(
-      error,
-      "Could not delete announcement"
-    );
-  }
-}
-
-function renderAnnouncements() {
-  const section = getPage(
-    "announcements",
-    "Announcement Manager",
-    "Publish class updates, study guidance, and resource attachments."
-  );
-
-  const panel = makeSection(
-    "Class announcements",
-    "Only publish information that students should be able to see."
-  );
-
-  panel.heading.appendChild(
-    button(
-      "Create announcement",
-      () => openAnnouncementEditor()
-    )
-  );
-
-  const list = element("div", "teacher-list");
-
-  if (!teacherState.announcements.length) {
-    list.appendChild(
-      createEmptyState({
-        icon: "✦",
-        title: "No announcements yet",
-        description:
-          "Create your first classroom announcement.",
-        actionLabel: "Create announcement",
-        onAction: () => openAnnouncementEditor()
-      })
-    );
-  } else {
-    [...teacherState.announcements]
-      .sort(
-        (a, b) =>
-          safeNumber(b.createdAt) -
-          safeNumber(a.createdAt)
-      )
-      .forEach(item => {
-        list.appendChild(
-          renderAnnouncementItem(item)
+    if (item.attachmentPath) {
+      try {
+        await deleteObject(
+          storageRef(state.storage, item.attachmentPath)
         );
-      });
-  }
+      } catch (storageError) {
+        console.warn(
+          "Announcement database record deleted, but attachment cleanup failed:",
+          storageError
+        );
+      }
+    }
 
-  panel.section.appendChild(list);
-  section.appendChild(panel.section);
+    showToast("Announcement deleted.");
+  } catch (error) {
+    console.error(error);
+    showToast(
+      error.message || "Could not delete announcement.",
+      true
+    );
+  }
 }
 
-// ============================================================
-// PRIVATE DOUBT INBOX
-// ============================================================
+/* ============================================================
+   CLASS CHAT
+   ============================================================ */
 
-function renderDoubtItem(doubt) {
-  const card = element("article", "teacher-item");
-  const content = element("div", "teacher-item-content");
+function renderChat(container) {
+  const messages = [...state.chatMessages]
+    .filter(item => item.deleted !== true && item.hidden !== true)
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
 
-  content.append(
-    element(
-      "h3",
-      "",
-      doubt.subject || "Math question"
-    ),
-    element(
-      "p",
-      "",
-      `From: ${doubt.studentName || doubt.studentEmail || doubt.uid || "Student"}`
-    ),
-    element(
-      "p",
-      "",
-      `Topic: ${doubt.category || "Other"}`
-    ),
-    element("p", "", doubt.question || ""),
-    element(
-      "p",
-      "",
-      `Submitted: ${formatDateTime(doubt.createdAt)}`
-    )
+  container.innerHTML = `
+    <section class="teacher-page chat-page">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">CLASSROOM</p>
+          <h1>Class chat</h1>
+          <p>Communicate with students in the shared classroom.</p>
+        </div>
+      </div>
+
+      <div class="chat-panel">
+        <div id="teacherChatMessages" class="chat-messages">
+          ${
+            messages.length
+              ? messages.map(renderChatMessage).join("")
+              : createEmptyState(
+                  "No messages yet",
+                  "The classroom conversation will appear here."
+                )
+          }
+        </div>
+
+        <form id="teacherChatForm" class="chat-composer">
+          <textarea
+            id="teacherChatInput"
+            class="input textarea"
+            rows="2"
+            maxlength="${MAX_CHAT_LENGTH}"
+            placeholder="Write a message..."
+            required
+          ></textarea>
+
+          <button class="btn btn-primary" type="submit">
+            Send
+          </button>
+        </form>
+      </div>
+    </section>
+  `;
+
+  el("#teacherChatForm")?.addEventListener(
+    "submit",
+    sendChatMessage
   );
+}
 
-  if (doubt.reply) {
-    content.appendChild(
-      element("p", "", `Your reply: ${doubt.reply}`)
+function renderChatMessage(message) {
+  const own = message.uid === uid();
+
+  return `
+    <article class="chat-message ${own ? "own" : ""}">
+      <div class="chat-message-meta">
+        <strong>${escape(message.displayName || "Student")}</strong>
+        <time>${formatDateTime(message.createdAt)}</time>
+      </div>
+
+      <div class="chat-message-body">
+        ${escape(message.message || "").replace(/\n/g, "<br>")}
+      </div>
+    </article>
+  `;
+}
+
+async function sendChatMessage(event) {
+  event.preventDefault();
+
+  const input = el("#teacherChatInput");
+  const message = input?.value.trim() || "";
+
+  if (!message || message.length > MAX_CHAT_LENGTH) return;
+
+  if (!state.db || !uid()) return;
+
+  try {
+    const messageRef = push(ref(state.db, PATHS.chat));
+
+    await set(messageRef, {
+      id: messageRef.key,
+      uid: uid(),
+      displayName: teacherName(),
+      message,
+      createdAt: serverTimestamp(),
+      deleted: false,
+      hidden: false,
+      flagged: false,
+      reported: false,
+      moderationStatus: "active"
+    });
+
+    input.value = "";
+  } catch (error) {
+    console.error(error);
+    showToast(
+      error.message || "Could not send message.",
+      true
+    );
+  }
+}
+
+/* ============================================================
+   DOUBTS
+   ============================================================ */
+
+function renderDoubts(container) {
+  const doubts = sortNewest(state.doubts);
+
+  container.innerHTML = `
+    <section class="teacher-page">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">STUDENT SUPPORT</p>
+          <h1>Doubt inbox</h1>
+          <p>Answer questions privately and help students move forward.</p>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <select id="doubtStatusFilter" class="input">
+          <option value="all">All doubts</option>
+          <option value="submitted">Open</option>
+          <option value="resolved">Resolved</option>
+          <option value="closed">Closed</option>
+        </select>
+
+        <input
+          id="doubtSearch"
+          class="input"
+          type="search"
+          placeholder="Search student, subject or question..."
+        />
+      </div>
+
+      <div id="teacherDoubtList">
+        ${renderDoubtList(doubts)}
+      </div>
+    </section>
+  `;
+
+  const filter = el("#doubtStatusFilter");
+  const search = el("#doubtSearch");
+
+  const refresh = () => {
+    const status = filter?.value || "all";
+    const term = (search?.value || "").trim().toLowerCase();
+
+    const filtered = doubts.filter(doubt => {
+      const statusMatch =
+        status === "all" ||
+        (doubt.status || "submitted") === status;
+
+      const searchMatch =
+        !term ||
+        String(doubt.studentName || "").toLowerCase().includes(term) ||
+        String(doubt.subject || "").toLowerCase().includes(term) ||
+        String(doubt.question || "").toLowerCase().includes(term);
+
+      return statusMatch && searchMatch;
+    });
+
+    const list = el("#teacherDoubtList");
+
+    if (list) {
+      list.innerHTML = renderDoubtList(filtered);
+    }
+
+    bindDoubtButtons();
+  };
+
+  filter?.addEventListener("change", refresh);
+  search?.addEventListener("input", refresh);
+
+  bindDoubtButtons();
+}
+
+function renderDoubtList(doubts) {
+  if (!doubts.length) {
+    return createEmptyState(
+      "No doubts found",
+      "There are no student questions matching this filter."
     );
   }
 
-  content.appendChild(
-    createStatusBadge(doubt.status || "submitted")
-  );
+  return `
+    <div class="doubt-list">
+      ${doubts.map(doubt => `
+        <article class="doubt-card">
+          <div class="doubt-header">
+            <div>
+              <strong>${escape(doubt.studentName || "Student")}</strong>
+              <span>${escape(doubt.studentEmail || "")}</span>
+            </div>
 
-  const actions = element("div", "teacher-item-actions");
+            ${createStatusBadge(doubt.status || "submitted")}
+          </div>
 
-  actions.appendChild(
-    button(
-      doubt.reply ? "Edit reply" : "Reply",
-      () => openDoubtReply(doubt)
-    )
-  );
+          <p class="doubt-subject">
+            ${escape(doubt.subject || "Mathematics")}
+          </p>
 
-  card.append(content, actions);
+          <div class="doubt-question">
+            ${escape(doubt.question || "").replace(/\n/g, "<br>")}
+          </div>
 
-  return card;
+          ${
+            doubt.reply
+              ? `
+                <div class="doubt-reply">
+                  <strong>Your reply</strong>
+                  <p>${escape(doubt.reply).replace(/\n/g, "<br>")}</p>
+                </div>
+              `
+              : ""
+          }
+
+          <div class="doubt-actions">
+            <button
+              class="btn btn-small btn-primary"
+              data-reply-doubt="${escape(doubt.id)}"
+            >
+              ${doubt.reply ? "Edit reply" : "Reply"}
+            </button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function bindDoubtButtons() {
+  all("[data-reply-doubt]").forEach(button => {
+    button.addEventListener("click", () => {
+      const doubt = state.doubts.find(
+        item => item.id === button.dataset.replyDoubt
+      );
+
+      if (doubt) openDoubtReply(doubt);
+    });
+  });
 }
 
 function openDoubtReply(doubt) {
-  if (!doubt.id) {
-    notify("This doubt has no valid ID.", "error");
-    return;
-  }
+  const content = `
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">PRIVATE DOUBT</p>
+        <h2>${escape(doubt.studentName || "Student")}</h2>
+        <p>${escape(doubt.subject || "Mathematics")}</p>
+      </div>
+    </div>
 
-  const form = document.createElement("form");
-  form.className = "teacher-form";
+    <div class="readonly-box doubt-question">
+      ${escape(doubt.question || "").replace(/\n/g, "<br>")}
+    </div>
 
-  const label = element("label", "", "Your response");
-  label.htmlFor = "teacherDoubtReply";
+    <form id="doubtReplyForm">
+      <div class="form-group">
+        <label for="doubtReply">Your reply</label>
+        <textarea
+          id="doubtReply"
+          class="input textarea"
+          rows="7"
+          maxlength="4000"
+          required
+          placeholder="Explain the solution clearly..."
+        >${escape(doubt.reply || "")}</textarea>
+      </div>
 
-  const textarea = document.createElement("textarea");
+      <div class="form-group">
+        <label for="doubtStatus">Status</label>
+        <select id="doubtStatus" class="input">
+          <option value="submitted" ${
+            doubt.status === "submitted" ? "selected" : ""
+          }>Open</option>
 
-  textarea.id = "teacherDoubtReply";
-  textarea.maxLength = 3000;
-  textarea.required = true;
-  textarea.value = doubt.reply || "";
-  textarea.placeholder =
-    "Explain the solution clearly...";
+          <option value="resolved" ${
+            doubt.status === "resolved" ? "selected" : ""
+          }>Resolved</option>
 
-  const field = element("div", "teacher-field");
+          <option value="closed" ${
+            doubt.status === "closed" ? "selected" : ""
+          }>Closed</option>
+        </select>
+      </div>
 
-  field.append(label, textarea);
-  form.appendChild(field);
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-close-modal
+        >
+          Cancel
+        </button>
 
-  let sending = false;
+        <button type="submit" class="btn btn-primary">
+          Save reply
+        </button>
+      </div>
+    </form>
+  `;
 
-  const modal = openModal({
-    title: "Respond to student",
-    description: doubt.subject || "Student doubt",
-    contentElement: form,
-    maxWidth: "620px",
+  openModal(content);
 
-    actions: [
-      {
-        label: "Cancel",
-        variant: "secondary"
-      },
-      {
-        label: "Send response",
-        variant: "primary",
-        closeOnClick: false,
+  el("#doubtReplyForm")?.addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
 
-        onClick: async () => {
-          if (sending) return;
+      const reply =
+        el("#doubtReply")?.value.trim() || "";
 
-          const reply = textarea.value.trim();
+      const status =
+        el("#doubtStatus")?.value || "resolved";
 
-          if (!reply) {
-            notify(
-              "Write a response before sending.",
-              "warning"
-            );
-
-            textarea.focus();
-            return;
-          }
-
-          sending = true;
-
-          try {
-            await update(
-              ref(
-                teacherState.db,
-                `${PATHS.doubts}/${doubt.id}`
-              ),
-              {
-                reply,
-                status: "resolved",
-                repliedBy: currentUID(),
-                repliedByName: currentName(),
-                repliedAt: Date.now(),
-                updatedAt: Date.now()
-              }
-            );
-
-            notify(
-              "Response sent to the student.",
-              "success"
-            );
-
-            modal.close();
-          } catch (error) {
-            reportError(
-              error,
-              "Could not send response"
-            );
-          } finally {
-            sending = false;
-          }
-        }
+      if (!reply) {
+        showToast("Write a reply first.", true);
+        return;
       }
-    ]
-  });
+
+      await saveDoubtReply(doubt, reply, status);
+    }
+  );
+
+  el("[data-close-modal]")?.addEventListener(
+    "click",
+    closeAnyModal
+  );
 }
 
-function renderDoubts() {
-  const section = getPage(
-    "doubts",
-    "Doubt Inbox",
-    "Respond to students' private mathematics questions."
-  );
+async function saveDoubtReply(doubt, reply, status) {
+  if (!state.db || !doubt?.id) return;
 
-  const panel = makeSection(
-    "Student questions",
-    "Only respond to doubts you are authorized to access."
-  );
-
-  const list = element("div", "teacher-list");
-
-  const doubts = [...teacherState.doubts].sort(
-    (a, b) =>
-      safeNumber(b.createdAt) -
-      safeNumber(a.createdAt)
-  );
-
-  if (!doubts.length) {
-    list.appendChild(
-      createEmptyState({
-        icon: "?",
-        title: "No student doubts",
-        description:
-          "New questions will appear here when submitted."
-      })
+  try {
+    await update(
+      ref(state.db, `${PATHS.doubts}/${doubt.id}`),
+      {
+        reply,
+        status,
+        repliedBy: uid(),
+        repliedByName: teacherName(),
+        repliedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }
     );
-  } else {
-    doubts.forEach(doubt => {
-      list.appendChild(
-        renderDoubtItem(doubt)
-      );
-    });
-  }
 
-  panel.section.appendChild(list);
-  section.appendChild(panel.section);
+    closeAnyModal();
+    showToast("Doubt reply saved.");
+  } catch (error) {
+    console.error(error);
+    showToast(
+      error.message || "Could not save reply.",
+      true
+    );
+  }
 }
 
-// ============================================================
-// STUDENT INSIGHTS
-// ============================================================
+/* ============================================================
+   STUDENT INSIGHTS
+   ============================================================ */
 
-function renderStudentInsights() {
-  const section = getPage(
-    "student-insights",
-    "Student Insights",
-    "Review recorded practice activity and participation."
+function renderStudents(container) {
+  const students = state.students;
+
+  container.innerHTML = `
+    <section class="teacher-page">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">CLASS OVERVIEW</p>
+          <h1>Students</h1>
+          <p>Overview of students currently registered in the classroom.</p>
+        </div>
+      </div>
+
+      ${
+        students.length
+          ? `
+            <div class="student-grid">
+              ${students.map(student => {
+                const studentLogs = state.logs.filter(
+                  log => log.uid === student.uid
+                );
+
+                const verified = studentLogs.filter(
+                  log => log.status === "verified"
+                ).length;
+
+                return `
+                  <article class="student-card">
+                    <div class="student-avatar">
+                      ${escape(
+                        String(
+                          student.displayName ||
+                          student.name ||
+                          "S"
+                        ).charAt(0).toUpperCase()
+                      )}
+                    </div>
+
+                    <h3>
+                      ${escape(
+                        student.displayName ||
+                        student.name ||
+                        "Student"
+                      )}
+                    </h3>
+
+                    <p>${escape(student.email || "")}</p>
+
+                    <div class="student-card-stats">
+                      <span>
+                        <strong>${studentLogs.length}</strong>
+                        Logs
+                      </span>
+
+                      <span>
+                        <strong>${verified}</strong>
+                        Verified
+                      </span>
+                    </div>
+                  </article>
+                `;
+              }).join("")}
+            </div>
+          `
+          : createEmptyState(
+              "No students found",
+              "Student profiles will appear here."
+            )
+      }
+    </section>
+  `;
+}
+
+/* ============================================================
+   PROFILE
+   ============================================================ */
+
+function renderProfile(container) {
+  const profile = state.profile || {};
+
+  container.innerHTML = `
+    <section class="teacher-page">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">ACCOUNT</p>
+          <h1>Teacher profile</h1>
+          <p>Information associated with your classroom account.</p>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="profile-avatar">
+          ${escape(
+            String(
+              profile.displayName ||
+              profile.name ||
+              teacherName()
+            ).charAt(0).toUpperCase()
+          )}
+        </div>
+
+        <div class="profile-details">
+          <h2>${escape(
+            profile.displayName ||
+            profile.name ||
+            teacherName()
+          )}</h2>
+
+          <p>${escape(
+            profile.email ||
+            state.user?.email ||
+            ""
+          )}</p>
+
+          <span class="role-badge">Teacher</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Account information</h2>
+
+        <dl class="profile-list">
+          <div>
+            <dt>Name</dt>
+            <dd>${escape(
+              profile.displayName ||
+              profile.name ||
+              "—"
+            )}</dd>
+          </div>
+
+          <div>
+            <dt>Email</dt>
+            <dd>${escape(
+              profile.email ||
+              state.user?.email ||
+              "—"
+            )}</dd>
+          </div>
+
+          <div>
+            <dt>Role</dt>
+            <dd>${escape(profile.role || "teacher")}</dd>
+          </div>
+
+          <div>
+            <dt>Status</dt>
+            <dd>${escape(profile.status || "active")}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  `;
+}
+
+/* ============================================================
+   REALTIME SUBSCRIPTIONS
+   ============================================================ */
+
+function subscribeToLogs() {
+  if (!state.db) return;
+
+  const logsQuery = query(
+    ref(state.db, PATHS.logs),
+    limitToLast(500)
   );
 
-  const grouped = new Map();
+  const unsubscribe = onValue(
+    logsQuery,
+    snapshot => {
+      state.logs = getRecords(snapshot);
+      renderCurrentPage();
+    },
+    error => {
+      console.error("Teacher logs listener:", error);
+      showToast(
+        "Unable to load student practice logs.",
+        true
+      );
+    }
+  );
 
-  teacherState.logs.forEach(log => {
-    const key = log.uid || "unknown";
+  addUnsubscriber(unsubscribe);
+}
 
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        uid: key,
-        name:
-          log.studentName ||
-          log.studentEmail ||
-          key,
-        sessions: 0,
-        questions: 0,
-        minutes: 0,
-        verified: 0
+function subscribeToAnnouncements() {
+  if (!state.db) return;
+
+  const announcementsQuery = query(
+    ref(state.db, PATHS.announcements),
+    limitToLast(200)
+  );
+
+  const unsubscribe = onValue(
+    announcementsQuery,
+    snapshot => {
+      state.announcements = sortNewest(
+        getRecords(snapshot)
+      ).filter(item => {
+        /*
+          Teacher sees announcements they authored.
+          Admin accounts can see the broader collection if
+          database rules allow the read.
+        */
+        return (
+          item.authorUID === uid() ||
+          state.profile?.role === "admin"
+        );
       });
-    }
 
-    const item = grouped.get(key);
-
-    item.sessions += 1;
-
-    item.questions += Math.max(
-      0,
-      safeNumber(log.questions)
-    );
-
-    item.minutes += Math.max(
-      0,
-      safeNumber(log.duration)
-    );
-
-    if (log.status === "verified") {
-      item.verified += 1;
-    }
-  });
-
-  const students = [...grouped.values()].sort(
-    (a, b) => b.questions - a.questions
-  );
-
-  const panel = makeSection(
-    "Practice activity",
-    `${students.length} student account(s) with recorded sessions`
-  );
-
-  if (!students.length) {
-    panel.section.appendChild(
-      createEmptyState({
-        icon: "∑",
-        title: "No practice data yet",
-        description:
-          "Student insights will appear after practice logs are submitted."
-      })
-    );
-
-    section.appendChild(panel.section);
-    return;
-  }
-
-  const maxQuestions = Math.max(
-    1,
-    ...students.map(student => student.questions)
-  );
-
-  const tableWrap = element(
-    "div",
-    "teacher-table-wrap"
-  );
-
-  const table = element("table", "teacher-table");
-
-  const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-
-  [
-    "Student",
-    "Sessions",
-    "Questions",
-    "Study time",
-    "Verified",
-    "Activity"
-  ].forEach(label => {
-    headerRow.appendChild(
-      element("th", "", label)
-    );
-  });
-
-  thead.appendChild(headerRow);
-
-  const tbody = document.createElement("tbody");
-
-  students.forEach(student => {
-    const row = document.createElement("tr");
-
-    row.append(
-      element("td", "", student.name),
-      element("td", "", String(student.sessions)),
-      element("td", "", String(student.questions)),
-      element("td", "", formatDuration(student.minutes)),
-      element("td", "", String(student.verified))
-    );
-
-    const activityCell = document.createElement("td");
-    const bar = element(
-      "div",
-      "teacher-insight-bar"
-    );
-
-    const fill = document.createElement("span");
-
-    fill.style.width =
-      `${Math.min(
-        100,
-        student.questions / maxQuestions * 100
-      )}%`;
-
-    bar.appendChild(fill);
-    activityCell.appendChild(bar);
-    row.appendChild(activityCell);
-
-    tbody.appendChild(row);
-  });
-
-  table.append(thead, tbody);
-  tableWrap.appendChild(table);
-  panel.section.appendChild(tableWrap);
-  section.appendChild(panel.section);
-}
-
-// ============================================================
-// ACTION CENTER
-// ============================================================
-
-function renderActionCenter() {
-  const section = getPage(
-    "action-center",
-    "Action Center",
-    "A focused overview of tasks requiring your attention."
-  );
-
-  const pending = teacherState.logs.filter(
-    log => !["verified", "rejected"].includes(log.status)
-  ).length;
-
-  const unanswered = teacherState.doubts.filter(
-    doubt =>
-      !doubt.reply &&
-      !["resolved", "closed"].includes(doubt.status)
-  ).length;
-
-  const items = [
-    {
-      title: "Practice verification",
-      description: `${pending} log(s) need review.`,
-      page: "verification"
+      renderCurrentPage();
     },
-    {
-      title: "Student support",
-      description: `${unanswered} doubt(s) await a response.`,
-      page: "doubts"
-    },
-    {
-      title: "Classroom communications",
-      description:
-        "Create or update a class announcement.",
-      page: "announcements"
-    },
-    {
-      title: "Learning insights",
-      description:
-        "Explore recorded student practice activity.",
-      page: "student-insights"
-    }
-  ];
-
-  const panel = makeSection("Your priorities");
-  const list = element("div", "teacher-list");
-
-  items.forEach(item => {
-    const card = element("article", "teacher-item");
-    const content = element(
-      "div",
-      "teacher-item-content"
-    );
-
-    content.append(
-      element("h3", "", item.title),
-      element("p", "", item.description)
-    );
-
-    card.append(
-      content,
-      button(
-        "Open",
-        () => teacherState.showPage?.(item.page),
-        "secondary"
-      )
-    );
-
-    list.appendChild(card);
-  });
-
-  panel.section.appendChild(list);
-  section.appendChild(panel.section);
-}
-
-// ============================================================
-// PAGE RENDERING
-// ============================================================
-
-function renderCurrentPage() {
-  switch (teacherState.currentPage) {
-    case "dashboard":
-      renderDashboard();
-      break;
-
-    case "action-center":
-      renderActionCenter();
-      break;
-
-    case "verification":
-      renderVerification();
-      break;
-
-    case "announcements":
-      renderAnnouncements();
-      break;
-
-    case "doubts":
-      renderDoubts();
-      break;
-
-    case "student-insights":
-      renderStudentInsights();
-      break;
-
-    default:
-      renderDashboard();
-  }
-}
-
-function renderAllPages() {
-  renderDashboard();
-  renderActionCenter();
-  renderVerification();
-  renderAnnouncements();
-  renderDoubts();
-  renderStudentInsights();
-}
-
-// ============================================================
-// SUBSCRIPTIONS
-// ============================================================
-
-function loadLogs() {
-  return subscribe(
-    PATHS.logs,
-    value => {
-      teacherState.logs = toArray(value);
-
-      if (teacherState.initialized) {
-        renderCurrentPage();
-      }
-    },
-    "practice logs"
-  );
-}
-
-function loadAnnouncements() {
-  return subscribe(
-    PATHS.announcements,
-    value => {
-      teacherState.announcements = toArray(value);
-
-      if (teacherState.initialized) {
-        renderCurrentPage();
-      }
-    },
-    "announcements"
-  );
-}
-
-function loadDoubts() {
-  return subscribe(
-    PATHS.doubts,
-    value => {
-      teacherState.doubts = toArray(value);
-
-      if (teacherState.initialized) {
-        renderCurrentPage();
-      }
-    },
-    "student doubts"
-  );
-}
-
-// ============================================================
-// CLEANUP
-// ============================================================
-
-function cleanup() {
-  teacherState.unsubscribers.forEach(unsubscribe => {
-    try {
-      unsubscribe();
-    } catch (error) {
-      console.warn(
-        "[Math Class Teacher] Listener cleanup failed:",
-        error
+    error => {
+      console.error("Teacher announcements listener:", error);
+      showToast(
+        "Unable to load announcements.",
+        true
       );
     }
-  });
+  );
 
-  teacherState.unsubscribers = [];
-
-  if (teacherState.pageChangeHandler) {
-    window.removeEventListener(
-      "mathclass:pagechange",
-      teacherState.pageChangeHandler
-    );
-
-    teacherState.pageChangeHandler = null;
-  }
-
-  teacherState.initialized = false;
+  addUnsubscriber(unsubscribe);
 }
 
-// ============================================================
-// INITIALIZATION
-// ============================================================
+function subscribeToChat() {
+  if (!state.db) return;
 
-export async function init(context) {
+  const chatQuery = query(
+    ref(state.db, PATHS.chat),
+    orderByChild("deleted"),
+    limitToLast(100)
+  );
+
+  const unsubscribe = onValue(
+    chatQuery,
+    snapshot => {
+      state.chatMessages = getRecords(snapshot)
+        .filter(item => item.deleted !== true);
+
+      renderCurrentPage();
+    },
+    error => {
+      console.error("Teacher chat listener:", error);
+      showToast(
+        "Unable to load class chat.",
+        true
+      );
+    }
+  );
+
+  addUnsubscriber(unsubscribe);
+}
+
+function subscribeToDoubts() {
+  if (!state.db) return;
+
+  const doubtsQuery = query(
+    ref(state.db, PATHS.doubts),
+    limitToLast(200)
+  );
+
+  const unsubscribe = onValue(
+    doubtsQuery,
+    snapshot => {
+      state.doubts = sortNewest(
+        getRecords(snapshot)
+      );
+
+      renderCurrentPage();
+    },
+    error => {
+      console.error("Teacher doubts listener:", error);
+      showToast(
+        "Unable to load student doubts.",
+        true
+      );
+    }
+  );
+
+  addUnsubscriber(unsubscribe);
+}
+
+/* ============================================================
+   STUDENTS
+   ============================================================ */
+
+async function loadStudents() {
+  if (!state.db) return;
+
+  try {
+    const snapshot = await get(
+      ref(state.db, PATHS.users)
+    );
+
+    state.students = getRecords(snapshot)
+      .filter(
+        user =>
+          user.role === "student" &&
+          user.status !== "disabled"
+      );
+  } catch (error) {
+    /*
+      Teachers may not have permission to list users under
+      a stricter production ruleset. This is intentionally
+      non-fatal.
+    */
+    console.warn(
+      "Student directory unavailable:",
+      error
+    );
+
+    state.students = [];
+  }
+}
+
+/* ============================================================
+   ROUTING / LIFECYCLE
+   ============================================================ */
+
+const PAGE_ALIASES = {
+  teacher: "teacher-dashboard",
+  dashboard: "teacher-dashboard",
+
+  "teacher-practice": "teacher-logs",
+  "practice-review": "teacher-logs",
+
+  announcements: "teacher-announcements",
+
+  "class-chat": "teacher-chat",
+
+  "doubt-inbox": "teacher-doubts",
+  doubts: "teacher-doubts",
+
+  students: "teacher-students",
+
+  profile: "teacher-profile"
+};
+
+function normalizePage(page) {
+  return PAGE_ALIASES[page] || page;
+}
+
+async function init(context = {}) {
   cleanup();
 
-  teacherState.auth = context.auth;
-  teacherState.db = context.db;
-  teacherState.user = context.user;
-  teacherState.profile = context.profile || null;
-  teacherState.toast = context.toast;
-  teacherState.showPage = context.showPage;
+  state.auth = context.auth || null;
+  state.db = context.db || null;
+  state.storage = context.storage || null;
+  state.user = context.user || null;
+  state.profile = context.profile || null;
+  state.toast = context.toast || null;
+  state.showPage = context.showPage || null;
 
-  if (!teacherState.user?.uid) {
+  state.logs = [];
+  state.announcements = [];
+  state.chatMessages = [];
+  state.doubts = [];
+  state.students = [];
+
+  state.currentPage = "teacher-dashboard";
+  state.initialized = true;
+
+  if (!state.user || !state.db) {
     throw new Error(
-      "A signed-in teacher account is required."
+      "Teacher module requires an authenticated Firebase user and database."
     );
   }
 
-  const contextRole = String(
-    context.role ||
-    teacherState.profile?.role ||
-    ""
-  ).toLowerCase();
-
-  if (
-    !["teacher", "admin"].includes(contextRole)
-  ) {
+  if (!isTeacher()) {
     throw new Error(
-      "This module is only for authorized teacher accounts."
+      "This account does not have teacher access."
     );
   }
 
-  const config = await import("./firebase-config.js");
+  /*
+    Storage is supplied by firebase-config.js where available.
+    The teacher module can still operate without Storage for
+    database-only functions.
+  */
 
-  teacherState.storage = config.storage;
+  subscribeToLogs();
+  subscribeToAnnouncements();
+  subscribeToChat();
+  subscribeToDoubts();
 
-  if (!teacherState.storage) {
-    console.warn(
-      "[Math Class Teacher] Firebase Storage is unavailable."
-    );
-  }
+  await loadStudents();
 
-  injectStyles();
+  state.pageChangeHandler = event => {
+    const requestedPage =
+      event?.detail?.page ||
+      event?.detail?.route ||
+      event?.detail;
 
-  teacherState.logs = [];
-  teacherState.announcements = [];
-  teacherState.doubts = [];
+    const page = normalizePage(requestedPage);
 
-  teacherState.currentPage = "dashboard";
-  teacherState.initialized = true;
+    if (!page) return;
 
-  renderAllPages();
+    const teacherPages = [
+      "teacher-dashboard",
+      "teacher-logs",
+      "teacher-announcements",
+      "teacher-chat",
+      "teacher-doubts",
+      "teacher-students",
+      "teacher-profile"
+    ];
 
-  loadLogs();
-  loadAnnouncements();
-  loadDoubts();
+    if (!teacherPages.includes(page)) return;
 
-  teacherState.pageChangeHandler = event => {
-    const role = String(
-      event.detail?.role || ""
-    ).toLowerCase();
-
-    if (role && !["teacher", "admin"].includes(role)) {
-      return;
-    }
-
-    teacherState.currentPage =
-      event.detail?.page || "dashboard";
-
+    state.currentPage = page;
     renderCurrentPage();
   };
 
   window.addEventListener(
     "mathclass:pagechange",
-    teacherState.pageChangeHandler
+    state.pageChangeHandler
   );
+
+  renderCurrentPage();
 
   return {
     cleanup,
-    refresh: renderAllPages
+    refresh: renderCurrentPage
   };
 }
+
+function cleanup() {
+  cleanupListeners();
+
+  if (state.pageChangeHandler) {
+    window.removeEventListener(
+      "mathclass:pagechange",
+      state.pageChangeHandler
+    );
+  }
+
+  state.pageChangeHandler = null;
+  state.initialized = false;
+}
+
+/* ============================================================
+   MODAL HELPERS
+   ============================================================ */
+
+function closeAnyModal() {
+  const overlay =
+    el("#modalOverlay") ||
+    el("#modalRoot") ||
+    el(".modal-overlay");
+
+  if (!overlay) return;
+
+  /*
+    Support the different modal implementations that may be
+    present in components.js.
+  */
+  const closeButton =
+    overlay.querySelector("[data-modal-close]") ||
+    overlay.querySelector(".modal-close");
+
+  if (closeButton) {
+    closeButton.click();
+    return;
+  }
+
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.innerHTML = "";
+}
+
+/* ============================================================
+   FILE HELPERS
+   ============================================================ */
+
+function sanitizeFileName(name) {
+  return String(name || "attachment")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 120);
+}
+
+/* ============================================================
+   PUBLIC API
+   ============================================================ */
+
+export {
+  init,
+  cleanup
+};
